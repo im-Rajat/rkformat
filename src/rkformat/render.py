@@ -56,7 +56,15 @@ def render_body(
         ) from exc
 
     resolve = asset_url or data_uri(doc)
-    md = MarkdownIt("commonmark", {"html": allow_html, "linkify": True, "typographer": True})
+    # typographer is off deliberately: smart quotes and dash substitution are cosmetic, and
+    # they are the single largest source of divergence from the browser viewer's renderer
+    # (docs/assets/markdown.js), which cannot reuse this code on static hosting.
+    # linkify and typographer are both off deliberately. typographer's smart quotes and
+    # linkify's bare-URL detection are cosmetic, and both diverge from the browser viewer's
+    # renderer (docs/assets/markdown.js), which cannot reuse this code on static hosting.
+    # linkify also depends on the optional linkify-it-py package, so leaving it on would
+    # make output depend on whether that happens to be installed.
+    md = MarkdownIt("commonmark", {"html": allow_html, "linkify": False, "typographer": False})
     md.enable(["table", "strikethrough"])
 
     def image_rule(self, tokens, idx, options, env):  # noqa: ANN001 - markdown-it hook
