@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+venv/
+
+# extension packaging
+vscode-extension/*.vsix
+vscode-extension/node_modules/
+
+# scratch documents made while trying the CLI in the repo root
+/*.rkf
+!examples/*.rkf

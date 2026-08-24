@@ -1,0 +1,87 @@
+{
+  "name": "rkformat",
+  "displayName": "RK Document (.rkf)",
+  "description": "View and edit .rkf compound documents — Markdown with its images embedded in a single file.",
+  "version": "0.1.0",
+  "publisher": "rkformat",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other", "Visualization"],
+  "keywords": ["markdown", "rkf", "document", "images"],
+  "main": "./extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "rkformat.editor",
+        "displayName": "RK Document",
+        "selector": [{ "filenamePattern": "*.rkf" }, { "filenamePattern": "*.rk" }],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      { "command": "rkformat.new", "title": "RK: New Document", "icon": "$(new-file)" },
+      { "command": "rkformat.insertImage", "title": "RK: Insert Image", "icon": "$(device-camera)" },
+      { "command": "rkformat.render", "title": "RK: Export Self-Contained HTML" },
+      { "command": "rkformat.unpack", "title": "RK: Unpack to Markdown Folder" },
+      { "command": "rkformat.pack", "title": "RK: Pack Markdown File into .rkf" },
+      { "command": "rkformat.check", "title": "RK: Validate Document" },
+      { "command": "rkformat.gc", "title": "RK: Remove Unreferenced Images" }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "rkformat.pack",
+          "when": "resourceExtname =~ /\\.(md|markdown)$/",
+          "group": "rkformat"
+        },
+        {
+          "command": "rkformat.unpack",
+          "when": "resourceExtname =~ /\\.(rkf|rk)$/",
+          "group": "rkformat"
+        },
+        {
+          "command": "rkformat.render",
+          "when": "resourceExtname =~ /\\.(rkf|rk)$/",
+          "group": "rkformat"
+        }
+      ],
+      "commandPalette": [
+        { "command": "rkformat.insertImage", "when": "activeCustomEditorId == rkformat.editor" },
+        { "command": "rkformat.gc", "when": "activeCustomEditorId == rkformat.editor" }
+      ]
+    },
+    "configuration": {
+      "title": "RK Document",
+      "properties": {
+        "rkformat.command": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["python3", "-m", "rkformat"],
+          "markdownDescription": "Command used to invoke the `rk` tool. Use `[\"rk\"]` if the package is installed on PATH."
+        },
+        "rkformat.extraPythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Prepended to `PYTHONPATH`. Point this at the repo's `src/` to run against a working copy without installing."
+        },
+        "rkformat.defaultLayout": {
+          "type": "string",
+          "enum": ["split", "preview", "source"],
+          "default": "split",
+          "description": "Which panes to show when a document opens."
+        },
+        "rkformat.allowHtml": {
+          "type": "boolean",
+          "default": false,
+          "description": "Render raw HTML embedded in the Markdown body. Off by default: a .rkf may come from someone else."
+        },
+        "rkformat.previewDebounceMs": {
+          "type": "number",
+          "default": 250,
+          "description": "Idle time before the preview re-renders while you type."
+        }
+      }
+    }
+  }
+}
