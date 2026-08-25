@@ -119,7 +119,7 @@ def render_body(
     body = md.render(doc.markdown)
     if html == "sanitize":
         body = sanitize(body, resolve_image=lambda src: _resolve_for_html(doc, src, resolve))
-    return _figurize(body)
+    return _tasklists(_figurize(body))
 
 
 def _resolve_for_html(doc: RkDocument, src: str, resolve: AssetUrl) -> dict[str, object] | None:
@@ -128,6 +128,24 @@ def _resolve_for_html(doc: RkDocument, src: str, resolve: AssetUrl) -> dict[str,
     if asset is None:
         return None
     return {"url": resolve(asset), "width": asset.width, "height": asset.height}
+
+
+# GFM task lists. Applied *after* sanitising, so the checkbox this generates does not
+# require <input> to be on the allowlist - an author writing raw <input> still gets it
+# dropped. Both renderers emit byte-identical markup here; see docs/assets/markdown.js.
+_TASK_ITEM = re.compile(r"<li>(\s*(?:<p>)?\s*)\[([ xX])\]\s+")
+_CHECKED_BOX = '<input checked disabled type="checkbox" /> '
+_UNCHECKED_BOX = '<input disabled type="checkbox" /> '
+
+
+def _tasklists(body: str) -> str:
+    """Turn `- [ ] item` into a checkbox, the way GitHub-flavoured Markdown does."""
+
+    def replace(match: re.Match[str]) -> str:
+        box = _CHECKED_BOX if match.group(2).lower() == "x" else _UNCHECKED_BOX
+        return f'<li class="rkf-task">{match.group(1)}{box}'
+
+    return _TASK_ITEM.sub(replace, body)
 
 
 def _figurize(body: str) -> str:
@@ -206,6 +224,15 @@ table { border-collapse: collapse; width: 100%; font-size: .95em; }
 th, td { border: 1px solid var(--rkf-rule); padding: .5em .7em; text-align: left; }
 th { background: var(--rkf-code-bg); font-weight: 600; }
 hr { border: 0; border-top: 1px solid var(--rkf-rule); margin: 2.5em 0; }
+li.rkf-task {
+  list-style: none;
+  margin-left: -1.15em;
+}
+li.rkf-task input[type="checkbox"] {
+  margin: 0 .45em 0 0;
+  vertical-align: baseline;
+  accent-color: var(--rkf-accent);
+}
 figure { margin: 1.8em 0; text-align: center; }
 figcaption { margin-top: .6em; font-size: .85rem; color: var(--rkf-muted); font-style: italic; }
 .rkf-image {

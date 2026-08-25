@@ -93,6 +93,12 @@ file. Send it to someone and the pictures go with it. No `images/` folder, no br
 - **Toggle Live / Source / Split / Preview** to switch layouts. In **Live** you type
   straight into this page, like a word processor.
 
+## Checklists work
+
+- [x] Task lists render as real checkboxes
+- [x] In the VS Code editor you can tick them
+- [ ] This one is still open
+
 ## It is still just Markdown
 
 Ordinary formatting works: *italic*, **bold**, `code`, [links](https://example.com), and:

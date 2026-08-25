@@ -156,6 +156,15 @@ const FIXTURES = [
   ["entity-in-title", '[x](https://e.com "&copy; title")\n'],
   ["entity-in-img-title", '![a](assets/chart.png "&copy; t")\n'],
   ["entity-html-block", '<div>&lt;shown as text&gt; &copy;</div>\n'],
+  // GFM task lists.
+  ["task-list", "- [ ] todo\n- [x] done\n"],
+  ["task-list-mixed", "- [ ] todo\n- plain\n- [X] upper\n"],
+  ["task-list-ordered", "1. [ ] first\n2. [x] second\n"],
+  ["task-list-nested", "- [ ] outer\n  - [x] inner\n"],
+  ["task-list-loose", "- [ ] one\n\n- [x] two\n"],
+  ["task-list-inline", "- [ ] with **bold** and `code`\n"],
+  ["task-not-a-task", "- [] missing space\n- [y] wrong letter\n"],
+  ["task-in-paragraph", "Text [ ] not a task\n"],
   ["mixed", fs.readFileSync(path.join(root, "docs/fixtures/mixed.md"), "utf8")],
 ];
 

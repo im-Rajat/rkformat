@@ -300,8 +300,22 @@
       if (Array.from(item.children).some((child) => tag(child) === "p")) loose = true;
     }
     items.forEach((item, index) => {
-      const marker = ordered ? `${start + index}. ` : "- ";
-      const pad = " ".repeat(marker.length);
+      // A task list item carries a checkbox that must come back as `[ ]` or `[x]`. Scoped to
+      // the item's own content so a checkbox in a nested list is not picked up here.
+      const checkbox = item.querySelector(
+        ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
+      );
+      const task = checkbox
+        ? checkbox.checked || checkbox.hasAttribute("checked")
+          ? "[x] "
+          : "[ ] "
+        : "";
+      const listMarker = ordered ? `${start + index}. ` : "- ";
+      const marker = listMarker + task;
+      // Continuation lines line up with the *list marker*, not the task checkbox: `[ ]` is
+      // part of the item's content, so counting it would over-indent a nested list far
+      // enough that it reads back as plain text instead of a sublist.
+      const pad = " ".repeat(listMarker.length);
       // A nested list must follow its item's text with a single newline. A blank line
       // there would make the outer list loose, and the paragraphs would come back wrapped
       // in <p> - a visible change from an edit that changed nothing.

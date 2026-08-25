@@ -1,5 +1,14 @@
-/* Editor chrome. The document itself is styled by the stylesheet `rk css` emits, so the
-   preview pane matches `rk render` output exactly. */
+/* Editor chrome.
+ *
+ * The document itself is styled by document.css, which is generated from `rk css` so the
+ * rendered page matches `rk render` output exactly. Everything here is framing: the
+ * toolbars, the pane layout, and the width of the writing surface.
+ */
+
+/* `hidden` has to beat the `display` values set on ids below: an id selector with
+   `display: flex` otherwise wins over the user-agent [hidden] rule, and the format bar
+   would show in every mode. */
+[hidden] { display: none !important; }
 
 html, body {
   height: 100%;
@@ -17,48 +26,124 @@ body.rkf-editor {
   font-size: var(--vscode-font-size);
 }
 
+/* ------------------------------------------------------------------- toolbars */
+
 #toolbar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.28));
   background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
 }
 
-#toolbar .group {
+/* Segmented control for the four modes: one outline around the group instead of a border per
+   button, which is what made the previous toolbar look heavy. */
+#toolbar .modes {
   display: flex;
-  gap: 4px;
+  flex: 0 0 auto;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 5px;
+  overflow: hidden;
 }
 
-#toolbar .spacer { flex: 1 1 auto; }
-
-#toolbar button {
-  padding: 3px 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.18));
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+#toolbar .modes button {
+  padding: 3px 11px;
+  border: 0;
+  border-right: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: transparent;
+  color: var(--vscode-foreground);
   font: inherit;
+  font-size: 0.85em;
   cursor: pointer;
+  white-space: nowrap;
 }
 
-#toolbar button:hover {
-  background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.3));
+#toolbar .modes button:last-child { border-right: 0; }
+#toolbar .modes button:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
 }
-
-#toolbar button.active {
+#toolbar .modes button.active {
   background: var(--vscode-button-background);
   color: var(--vscode-button-foreground);
 }
 
-#status {
-  font-size: 0.85em;
-  opacity: 0.7;
-  min-width: 6rem;
-  text-align: right;
+#toolbar .spacer { flex: 1 1 auto; }
+
+#toolbar .sep,
+#format-bar .sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 17px;
+  margin: 0 3px;
+  background: var(--vscode-panel-border, rgba(128, 128, 128, 0.32));
 }
+
+/* Borderless icon buttons: hover is the only chrome they need. */
+button.tool,
+#format-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+button.tool:hover,
+#format-bar button:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.22));
+}
+
+button.tool:active,
+#format-bar button:active {
+  background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.35));
+}
+
+button.tool.active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+#format-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.28));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+#format-bar .glyph { line-height: 1; font-size: 1.05em; }
+#format-bar .glyph-bold .glyph { font-weight: 700; }
+#format-bar .glyph-italic .glyph { font-style: italic; font-family: Georgia, "Times New Roman", serif; }
+#format-bar .glyph-strike .glyph { text-decoration: line-through; }
+#format-bar .glyph-code .glyph {
+  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
+  font-size: 0.8em;
+}
+
+#status {
+  font-size: 0.82em;
+  opacity: 0.7;
+  min-width: 5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------- panes */
 
 #panes {
   flex: 1 1 auto;
@@ -68,24 +153,22 @@ body.rkf-editor {
 
 #panes.dropping { outline: 2px dashed var(--vscode-focusBorder); outline-offset: -4px; }
 
-#source-pane, #preview-pane {
+#live-pane, #source-pane, #preview-pane {
   min-width: 0;
   height: 100%;
   overflow: auto;
 }
 
+#live-pane { flex: 1 1 100%; }
 #source-pane { flex: 1 1 50%; display: flex; }
-#preview-pane { flex: 1 1 50%; background: var(--rkf-desk, #f0f0f2); }
+#preview-pane { flex: 1 1 50%; }
 
 #divider {
   flex: 0 0 1px;
   background: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
 }
 
-/* Layout switching. `hidden`-style rules are written per pane so the flex children keep
-   their sizing when shown again. */
-#live-pane { flex: 1 1 100%; height: 100%; overflow: auto; background: var(--rkf-desk, #f0f0f2); }
-
+/* Layout switching, written per pane so the flex children keep their sizing when shown. */
 #panes[data-layout="live"] #source-pane,
 #panes[data-layout="live"] #preview-pane,
 #panes[data-layout="live"] #divider { display: none; }
@@ -100,16 +183,40 @@ body.rkf-editor {
 #panes[data-layout="preview"] #source-pane,
 #panes[data-layout="preview"] #divider { display: none; }
 
-/* ------------------------------------------------------------ live (WYSIWYG) pane */
+/* ------------------------------------------------------------- writing surface */
 
-#live {
-  max-width: 46rem;
-  margin: 1.5rem auto 6rem;
-  padding: 2.5rem 3rem 3rem;
-  min-height: 60vh;
-  outline: none;
+/* Editing wants width; reading wants a measure. `full` (the default) drops the paper-card
+   look that document.css gives `.rkf-page` and lets the text use the pane, which is how a
+   word processor behaves. `page` restores the narrow centred sheet. */
+body[data-width="full"] #live,
+body[data-width="full"] #preview {
+  max-width: none;
+  margin: 0;
+  padding: 1.75rem clamp(1rem, 6%, 5.5rem) 6rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
+body[data-width="page"] #live-pane,
+body[data-width="page"] #preview-pane {
+  background: var(--rkf-desk, #f0f0f2);
+}
+
+body[data-width="page"] #live,
+body[data-width="page"] #preview {
+  max-width: 46rem;
+  margin: 1.5rem auto;
+  padding: 2.5rem 3rem 4rem;
+}
+
+@media (max-width: 45rem) {
+  body[data-width="page"] #live,
+  body[data-width="page"] #preview { margin: 0; padding: 1.25rem 1.25rem 3rem; }
+}
+
+#live { min-height: 60vh; outline: none; }
 #live:focus-visible { outline: none; }
 
 #live[contenteditable="true"]:empty::before {
@@ -117,46 +224,17 @@ body.rkf-editor {
   color: var(--vscode-descriptionForeground, #888);
 }
 
-/* Make the structure legible while editing without changing the printed result. */
+/* Make structure legible while editing without changing the rendered result. */
 #live table { table-layout: auto; }
 #live td:empty::after, #live th:empty::after { content: "\200b"; }
 #live img { cursor: default; }
-#live img:hover { outline: 2px solid var(--vscode-focusBorder, #0a84ff); outline-offset: 2px; }
-
-#format-bar {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  flex: 0 0 auto;
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
-  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
-  overflow-x: auto;
+#live img:hover {
+  outline: 2px solid var(--vscode-focusBorder, #0a84ff);
+  outline-offset: 2px;
 }
 
-#format-bar button {
-  min-width: 28px;
-  padding: 3px 7px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--vscode-foreground);
-  font: inherit;
-  font-size: 0.88em;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-#format-bar button:hover {
-  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.25));
-}
-
-#format-bar .sep {
-  width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  background: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
-}
+/* Task checkboxes are click targets while editing, not part of the text flow. */
+#live input[type="checkbox"] { cursor: pointer; }
 
 #source {
   flex: 1 1 auto;
@@ -164,7 +242,7 @@ body.rkf-editor {
   border: 0;
   resize: none;
   outline: none;
-  padding: 1rem 1.1rem;
+  padding: 1.25rem clamp(1rem, 4%, 3rem);
   background: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
   font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
@@ -173,16 +251,7 @@ body.rkf-editor {
   tab-size: 2;
 }
 
-/* The preview pane reuses the shared page styles; only its framing differs here. */
-#preview-pane .rkf-page {
-  max-width: 44rem;
-  margin: 1.5rem auto;
-  padding: 2.5rem 3rem 4rem;
-}
-
-@media (max-width: 60rem) {
-  #preview-pane .rkf-page { margin: 0.75rem; padding: 1.25rem 1.25rem 2.5rem; }
-}
+/* ------------------------------------------------------------- images sidebar */
 
 #assets {
   flex: 0 0 auto;
@@ -245,6 +314,8 @@ body.rkf-editor {
 .asset-actions button.danger:hover {
   background: var(--vscode-inputValidation-errorBackground, rgba(200, 60, 60, 0.25));
 }
+
+/* ------------------------------------------------------------------- problems */
 
 #problems {
   flex: 0 0 auto;

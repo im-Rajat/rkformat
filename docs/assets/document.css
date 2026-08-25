@@ -66,6 +66,15 @@ table { border-collapse: collapse; width: 100%; font-size: .95em; }
 th, td { border: 1px solid var(--rkf-rule); padding: .5em .7em; text-align: left; }
 th { background: var(--rkf-code-bg); font-weight: 600; }
 hr { border: 0; border-top: 1px solid var(--rkf-rule); margin: 2.5em 0; }
+li.rkf-task {
+  list-style: none;
+  margin-left: -1.15em;
+}
+li.rkf-task input[type="checkbox"] {
+  margin: 0 .45em 0 0;
+  vertical-align: baseline;
+  accent-color: var(--rkf-accent);
+}
 figure { margin: 1.8em 0; text-align: center; }
 figcaption { margin-top: .6em; font-size: .85rem; color: var(--rkf-muted); font-style: italic; }
 .rkf-image {

@@ -2,7 +2,7 @@
   "name": "rkformat",
   "displayName": "RK Document (.rkf)",
   "description": "View and edit .rkf compound documents - Markdown with its images embedded in a single file. Live WYSIWYG editing, split preview, and paste-to-embed.",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "publisher": "rkformat",
   "license": "MIT",
   "repository": {
@@ -182,6 +182,19 @@
           ],
           "default": "sanitize",
           "markdownDescription": "How raw HTML in the document body is handled."
+        },
+        "rkformat.editorWidth": {
+          "type": "string",
+          "enum": [
+            "full",
+            "page"
+          ],
+          "enumDescriptions": [
+            "Use the full width of the editor, like a WYSIWYG word processor. Best for writing.",
+            "A narrow centred page (46rem) with a paper look. Best for reading."
+          ],
+          "default": "full",
+          "description": "How wide the document is in the editor."
         }
       }
     }

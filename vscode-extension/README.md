@@ -14,6 +14,13 @@ Opens `.rkf` and `.rk` files as a real editor instead of a binary blob, in four 
 | **Source** | Markdown only. |
 | **Preview** | Rendered page only. |
 
+- **A full-width writing surface** by default, like a word processor. The page button in the
+  toolbar (or `rkformat.editorWidth`) switches to a narrow centred sheet for reading.
+- **A formatting toolbar** in Live mode: undo/redo, bold, italic, strikethrough, inline code,
+  H1–H3, body text, bulleted/numbered/task lists, indent and outdent, quote, code block,
+  table, horizontal rule, link, image, and clear formatting. Ctrl+B / Ctrl+I / Ctrl+K work.
+- **Task lists** render as real checkboxes you can tick; the tick is written back into the
+  Markdown.
 - **Paste or drag an image** in and it is embedded in the document — no sidecar folder, no
   broken links when you send the file to someone. In Live mode the picture appears at the
   caret; in the other modes a Markdown reference is inserted.
@@ -92,6 +99,7 @@ To develop against it instead, open `vscode-extension/` in VS Code and press F5.
 | `rkformat.command` | `["python3", "-m", "rkformat"]` | How to invoke the CLI. Probed automatically if unset. |
 | `rkformat.extraPythonPath` | `""` | Prepended to `PYTHONPATH`. |
 | `rkformat.defaultLayout` | `"split"` | `live`, `split`, `preview`, or `source`. |
+| `rkformat.editorWidth` | `"full"` | `full` uses the whole editor; `page` is a narrow centred sheet. |
 | `rkformat.html` | `"sanitize"` | Raw HTML handling: `sanitize` (allowlist), `escape` (show as text), `raw` (untouched). |
 | `rkformat.previewDebounceMs` | `250` | Idle time before the preview re-renders. |
 

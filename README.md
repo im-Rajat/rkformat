@@ -129,6 +129,20 @@ The reference implementations are [rkformat/sanitize.py](src/rkformat/sanitize.p
 [docs/assets/sanitize.js](docs/assets/sanitize.js), and the parity test diffs them over a
 battery of hostile inputs.
 
+## Task lists
+
+GitHub-flavoured checkboxes work:
+
+```markdown
+- [x] Ship the viewer
+- [ ] Write the announcement
+```
+
+They render as real checkboxes, and in the VS Code editor's Live mode you can tick them —
+the tick is written back into the Markdown. The transform runs *after* HTML sanitising, so
+the generated `<input>` never requires `<input>` on the allowlist; an author writing raw
+`<input>` still has it dropped.
+
 ## Reading one without any tooling
 
 Three routes, in increasing order of fidelity:
@@ -186,10 +200,18 @@ installed.
 
 | Mode | What it is |
 |---|---|
-| **Live** | Type straight into the rendered page, like a word processor. Formatting toolbar, Ctrl+B/I/K. |
+| **Live** | Type straight into the rendered page, like a word processor. Full formatting toolbar. |
 | **Split** | Markdown source beside a live preview. |
 | **Source** | Markdown only. |
 | **Preview** | Rendered page only. |
+
+The writing surface uses the **full width** of the editor by default, because a narrow
+measure suits reading and gets cramped for writing. `rkformat.editorWidth: "page"` — or the
+page button in the toolbar — switches to a narrow centred sheet.
+
+The Live toolbar covers undo/redo, bold, italic, strikethrough, inline code, H1–H3, body
+text, bulleted, numbered and task lists, indent and outdent, block quote, code block, table,
+horizontal rule, link, image, and clear formatting.
 
 **Paste or drag an image straight in** and it is embedded in the file. The extension has no
 dependencies and no build step — it shells out to the `rk` CLI, so the editor and the command

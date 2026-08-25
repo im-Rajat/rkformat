@@ -59,8 +59,25 @@
     button.addEventListener("click", () => setLayout(button.dataset.layout));
   }
 
-  document.getElementById("insert-image").addEventListener("click", () =>
-    vscode.postMessage({ type: "pickImage" })
+  /**
+   * Full width or a narrow page.
+   *
+   * A measure of ~75 characters is right for reading, but cramped for writing - which is why
+   * the default is the full pane and this only exists to switch back.
+   */
+  function setWidth(name) {
+    const width = name === "page" ? "page" : "full";
+    document.body.dataset.width = width;
+    document.getElementById("toggle-width").classList.toggle("active", width === "page");
+    try {
+      vscode.setState({ ...(vscode.getState() || {}), width });
+    } catch (err) {
+      /* state persistence is best effort */
+    }
+  }
+
+  document.getElementById("toggle-width").addEventListener("click", () =>
+    setWidth(document.body.dataset.width === "page" ? "full" : "page")
   );
   document.getElementById("cleanup").addEventListener("click", () =>
     vscode.postMessage({ type: "cleanup" })
@@ -141,11 +158,31 @@
   const FORMAT_BLOCKS = { h1: "H1", h2: "H2", h3: "H3", p: "P", quote: "BLOCKQUOTE", pre: "PRE" };
 
   function applyFormat(action) {
+    // Undo and redo belong to VS Code (see applyEdit in extension.js), so they are asked for
+    // rather than reimplemented here - a second history would fight the first.
+    if (action === "undo" || action === "redo") {
+      vscode.postMessage({ type: "history", direction: action });
+      return;
+    }
+    if (action === "image") {
+      vscode.postMessage({ type: "pickImage" });
+      return;
+    }
     live.focus();
     switch (action) {
       case "bold":
       case "italic":
         document.execCommand(action, false, null);
+        break;
+      case "outdent":
+      case "indent":
+        document.execCommand(action, false, null);
+        break;
+      case "clearFormat":
+        document.execCommand("removeFormat", false, null);
+        break;
+      case "task":
+        toggleTask();
         break;
       case "strikethrough":
         document.execCommand("strikeThrough", false, null);
@@ -183,6 +220,66 @@
     liveDirty = true;
     serializeLive({ immediate: true });
   }
+
+  /** The nearest ancestor of the caret matching `selector`, within the editable page. */
+  function closest(selector) {
+    const selection = window.getSelection();
+    if (!selection || !selection.anchorNode) return null;
+    const start =
+      selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
+    if (!start || !live.contains(start)) return null;
+    return start.closest(selector);
+  }
+
+  /**
+   * Turn the current list item into a task item, or back into a plain one.
+   *
+   * Creates the list first if the caret is not in one, which is what a word processor does
+   * when you click a list button on a bare paragraph.
+   */
+  function toggleTask() {
+    let item = closest("li");
+    if (!item) {
+      document.execCommand("insertUnorderedList", false, null);
+      item = closest("li");
+      if (!item) return;
+    }
+    const host = item.querySelector(":scope > p") || item;
+    const existing = item.querySelector(
+      ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
+    );
+    if (existing) {
+      existing.remove();
+      item.classList.remove("rkf-task");
+    } else {
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.setAttribute("contenteditable", "false");
+      item.classList.add("rkf-task");
+      host.insertBefore(box, host.firstChild);
+    }
+  }
+
+  /**
+   * Make the rendered checkboxes clickable.
+   *
+   * The renderers emit them `disabled`, which is right for a read-only page or an exported
+   * HTML file, but in live editing a checkbox you cannot tick is useless. `contenteditable`
+   * is turned off on them so the caret does not land inside.
+   */
+  function enableTaskCheckboxes() {
+    for (const box of live.querySelectorAll('input[type="checkbox"]')) {
+      box.disabled = false;
+      box.setAttribute("contenteditable", "false");
+    }
+  }
+
+  live.addEventListener("change", (event) => {
+    if (event.target && event.target.type === "checkbox") {
+      liveDirty = true;
+      serializeLive({ immediate: true });
+    }
+  });
 
   /** Wrap the selection in an element, for formats execCommand has no verb for. */
   function wrapSelection(tagName) {
@@ -477,10 +574,12 @@
         latestHtml = message.html || "";
         preview.innerHTML = latestHtml;
         live.innerHTML = latestHtml;
+        enableTaskCheckboxes();
         liveDirty = false;
         debounceMs = typeof message.debounceMs === "number" ? message.debounceMs : 250;
         renderAssets(message.assets);
         renderProblems(message.problems);
+        setWidth((vscode.getState() && vscode.getState().width) || message.width || "full");
         setLayout((vscode.getState() && vscode.getState().layout) || message.layout || "split");
         setStatus("");
         break;
@@ -494,6 +593,7 @@
         // someone is typing would throw the caret to the top of the document.
         if (message.forLive) {
           live.innerHTML = message.html;
+          enableTaskCheckboxes();
           liveDirty = false;
         }
         renderProblems(message.problems);

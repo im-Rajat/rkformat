@@ -618,6 +618,19 @@
     return { references, text: cleaned };
   }
 
+  // GFM task lists. Applied after sanitising so the generated checkbox does not require
+  // <input> on the allowlist. Mirrors render._tasklists byte for byte.
+  const TASK_ITEM = /<li>(\s*(?:<p>)?\s*)\[([ xX])\]\s+/g;
+  const CHECKED_BOX = '<input checked disabled type="checkbox" /> ';
+  const UNCHECKED_BOX = '<input disabled type="checkbox" /> ';
+
+  function tasklists(html) {
+    return html.replace(TASK_ITEM, (whole, lead, state) => {
+      const box = state.toLowerCase() === "x" ? CHECKED_BOX : UNCHECKED_BOX;
+      return `<li class="rkf-task">${lead}${box}`;
+    });
+  }
+
   /** Promote a lone image in a paragraph to a captioned figure. Mirrors render._figurize. */
   function figurize(html) {
     return html.replace(/<p>\s*(<img\b[^>]*>)\s*<\/p>/gi, (whole, tag) => {
@@ -649,7 +662,7 @@
         return resolved || null;
       });
     }
-    return out;
+    return tasklists(out);
   }
 
   global.RKF = Object.assign(global.RKF || {}, {
