@@ -177,11 +177,24 @@ function writeFile(name, bytes) {
       fs.readdirSync(path.join(work, "unpacked")).join(",")
     );
 
-    // Serialising twice must give identical bytes apart from the modified timestamp.
-    const again = await RKF.serialize(doc);
-    const strip = (input) =>
-      Buffer.from(input).toString("binary").replace(/"modified": "[^"]*"/, "");
-    check("serialisation is reproducible (section 6)", strip(bytes) === strip(again));
+    // Identical content must give identical bytes. `modified` is wall-clock and deliberately
+    // outside that guarantee, so it is pinned rather than stripped: the manifest is deflated,
+    // so a timestamp cannot be edited out of the finished archive - an earlier version of
+    // this check tried, and failed only when the two calls straddled a second boundary.
+    const pinned = { ...doc, manifest: { ...doc.manifest } };
+    Object.setPrototypeOf(pinned, Object.getPrototypeOf(doc));
+    const first = await RKF.serialize(pinned, { touch: false });
+    const second = await RKF.serialize(pinned, { touch: false });
+    check(
+      "serialisation is reproducible (section 6)",
+      Buffer.from(first).equals(Buffer.from(second)),
+      `${first.length} vs ${second.length} bytes`
+    );
+    check(
+      "touch:false leaves the recorded timestamp alone",
+      pinned.manifest.modified === doc.manifest.modified,
+      `${pinned.manifest.modified} vs ${doc.manifest.modified}`
+    );
   }
 
   console.log("--- reading back what we wrote ---");

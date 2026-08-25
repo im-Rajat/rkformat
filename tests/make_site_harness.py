@@ -234,7 +234,55 @@ function report() {
     check("the width button switches mode", document.body.dataset.width !== startWidth,
       document.body.dataset.width);
 
-    // 9. The images panel.
+    // 9. Layout: the source pane must fill the workspace.
+    //
+    // It used to collapse to the textarea's intrinsic two rows, because `height: 100%` on the
+    // pane resolves against a *definite* parent height and the landing page's body is
+    // `min-height: 100vh`. The whole document was there, just clipped to three lines.
+    click('[data-layout="source"]');
+    await waitFor("source mode", () => workspace.dataset.layout === "source");
+    const workspaceHeight = workspace.getBoundingClientRect().height;
+    const paneHeight = $("source-pane").getBoundingClientRect().height;
+    check("the page is in editing layout", document.body.classList.contains("editing"));
+    check(
+      "the source pane fills the workspace",
+      workspaceHeight > 100 && paneHeight > workspaceHeight * 0.9,
+      `pane ${Math.round(paneHeight)} of workspace ${Math.round(workspaceHeight)}`
+    );
+    check(
+      "the textarea fills the pane",
+      $("source").getBoundingClientRect().height > paneHeight * 0.9,
+      Math.round($("source").getBoundingClientRect().height)
+    );
+
+    // 10. Pasting from a web page must arrive as plain text.
+    //
+    // The guard compared `event.target` with the editable root, which never matches: the
+    // target is the element holding the caret. So rich clipboard HTML went straight in.
+    click('[data-layout="live"]');
+    await waitFor("live mode", () => workspace.dataset.layout === "live");
+    const pasteTarget = live.querySelector("p") || live.querySelector("li") || live;
+    selectInside(pasteTarget);
+    const pasteEvent = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, "clipboardData", {
+      value: {
+        items: [],
+        getData: (type) =>
+          type === "text/plain"
+            ? "PLAINTEXTPASTE"
+            : '<b>RICHPASTE</b><div style="color:red">markup</div>',
+      },
+    });
+    pasteTarget.dispatchEvent(pasteEvent);
+    await waitFor("paste", () => source.value.includes("PLAINTEXTPASTE"));
+    check("a paste arrives as plain text", source.value.includes("PLAINTEXTPASTE"), source.value);
+    check(
+      "the clipboard's markup did not come with it",
+      !live.innerHTML.includes("RICHPASTE") && !source.value.includes("RICHPASTE"),
+      live.innerHTML.slice(0, 200)
+    );
+
+    // 11. The images panel.
     click("#act-images");
     await wait(150);
     check("the details panel opens", $("details").hidden === false);

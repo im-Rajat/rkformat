@@ -126,6 +126,13 @@
         return;
       }
       if (markdown === source.value) return;
+      // Turning HTML back into Markdown is the lossy direction. If the page serialises to far
+      // less than it held - foreign markup pasted in, say - the edit is still applied, since
+      // refusing would strand it, but the loss is reported rather than silently accepted.
+      const before = source.value.length;
+      if (before > 400 && markdown.length < before * 0.6) {
+        setStatus("serialised to much less text - Ctrl+Z to undo");
+      }
       source.value = markdown;
       vscode.postMessage({ type: "change", markdown, label: "Edit page" });
     };

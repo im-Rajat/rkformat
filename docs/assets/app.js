@@ -239,6 +239,18 @@
         return;
       }
       if (markdown === els.source.value) return;
+      // Turning HTML back into Markdown is the lossy direction, and a mangled page - foreign
+      // markup pasted in, or another extension writing into the editable region - can
+      // serialise to far less than it held. Rather than swallowing that, say so: the text is
+      // still applied (refusing would strand the edit) but the loss is visible and undoable.
+      const before = els.source.value.length;
+      if (before > 400 && markdown.length < before * 0.6) {
+        status(
+          `The page serialised to much less text than it held (${before} to ` +
+            `${markdown.length} characters). Press Ctrl+Z to undo if that is wrong.`,
+          "warn"
+        );
+      }
       els.source.value = markdown;
       commit(markdown);
     };
@@ -262,7 +274,10 @@
     doc.markdown = markdown;
     doc.revalidate();
     markDirty(true);
-    if (layout !== "live") schedulePreview();
+    // Always refresh the preview, even in live mode where it is hidden. It is debounced and
+    // cheap, and it means the preview can never show a different document from the source -
+    // which was confusing precisely when something had gone wrong.
+    schedulePreview();
     renderDetails();
   }
 
@@ -630,6 +645,8 @@
 
     els.intro.hidden = true;
     els.workspace.hidden = false;
+    // Switches the page to a fixed-height column so the panes can fill it; see viewer.css.
+    document.body.classList.add("editing");
     els.modes.hidden = false;
     els.barActions.hidden = false;
     els.docName.hidden = false;
@@ -719,6 +736,7 @@
     doc = null;
     fileHandle = null;
     els.workspace.hidden = true;
+    document.body.classList.remove("editing");
     els.modes.hidden = true;
     els.barActions.hidden = true;
     els.docName.hidden = true;
@@ -1047,7 +1065,11 @@
       status(null);
       return;
     }
-    if (event.target === els.live) {
+    // `contains`, not `===`: when pasting into a contenteditable the event target is the
+    // element holding the caret - a <p>, <li> or heading - never the editable root. Comparing
+    // for identity meant this never matched, so the browser inserted the clipboard's rich
+    // HTML instead of plain text, and a paste from a web page dragged its whole markup in.
+    if (els.live.contains(event.target)) {
       const text = data.getData("text/plain");
       if (text) {
         event.preventDefault();

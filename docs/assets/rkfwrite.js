@@ -231,14 +231,21 @@
     return record;
   }
 
-  function manifestJson(doc) {
+  function manifestJson(doc, touch) {
     const source = doc.manifest || {};
     const out = { rkf_version: source.rkf_version || "1.0" };
     out.generator = "rkformat-web/0.1.0";
     if (source.title != null) out.title = source.title;
     if (Array.isArray(source.authors) && source.authors.length) out.authors = source.authors;
     if (source.created) out.created = source.created;
-    out.modified = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    // `touch: false` keeps the recorded timestamp, which is what makes byte-identical output
+    // possible: everything else about the archive is already deterministic, so `modified` is
+    // the only thing that changes between two saves of the same content. The Python library
+    // spells this the same way, as save(touch=False).
+    out.modified =
+      touch === false && source.modified
+        ? source.modified
+        : new Date().toISOString().replace(/\.\d+Z$/, "Z");
     out.content = source.content || "content.md";
     out.assets = doc.assets
       .slice()
@@ -251,10 +258,10 @@
   /**
    * Serialise a document to .rkf bytes.
    *
-   * Mutates `doc.manifest.modified`, since that is what was written.
+   * Mutates `doc.manifest.modified` to what was written, unless `touch` is false.
    */
-  async function serialize(doc) {
-    const manifest = manifestJson(doc);
+  async function serialize(doc, options = {}) {
+    const manifest = manifestJson(doc, options.touch);
     doc.manifest = { ...(doc.manifest || {}), ...manifest };
 
     const contentName = manifest.content;
@@ -279,8 +286,8 @@
     return buildZip(members);
   }
 
-  async function toBlob(doc) {
-    return new Blob([await serialize(doc)], { type: MIMETYPE });
+  async function toBlob(doc, options) {
+    return new Blob([await serialize(doc, options)], { type: MIMETYPE });
   }
 
   global.RKF = Object.assign(global.RKF || {}, {
