@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>.rkf viewer</title>
-<meta name="description" content="Open and read .rkf documents in the browser - Markdown with its images embedded in one file. Nothing is uploaded anywhere.">
+<title>.rkf — read, write and edit in the browser</title>
+<meta name="description" content="Create, edit and read .rkf documents in the browser - Markdown with its images embedded in one file. Nothing is uploaded anywhere.">
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="assets/document.css">
 <link rel="stylesheet" href="assets/viewer.css">
@@ -12,100 +12,136 @@
 <body>
 
 <header id="bar">
-  <div class="brand">
-    <strong>.rkf</strong> <span class="muted">viewer</span>
+  <div class="brand"><strong>.rkf</strong></div>
+
+  <div class="modes" id="modes" role="group" aria-label="View" hidden>
+    <button data-layout="live" title="Type straight into the page (WYSIWYG)">Live</button>
+    <button data-layout="source" title="Markdown source only">Source</button>
+    <button data-layout="split" title="Source and preview">Split</button>
+    <button data-layout="preview" title="Rendered page only">Preview</button>
   </div>
+
   <div class="bar-actions" id="bar-actions" hidden>
-    <button id="act-source" class="ghost" aria-pressed="false">Source</button>
-    <button id="act-details" class="ghost" aria-pressed="false">Details</button>
-    <button id="act-export" class="ghost">Save as HTML</button>
-    <button id="act-close" class="ghost">Close</button>
+    <span class="sep"></span>
+    <button class="tool" id="act-save" title="Save (Ctrl+S)"></button>
+    <button class="tool" id="act-saveas" title="Save a copy"></button>
+    <span class="sep"></span>
+    <button class="tool" id="act-images" title="Embedded images and document details"></button>
+    <button class="tool" id="act-cleanup" title="Remove images the body no longer references"></button>
+    <button class="tool" id="act-width" title="Toggle page width"></button>
+    <button class="tool" id="act-export" title="Export self-contained HTML"></button>
+    <span class="sep"></span>
+    <button class="tool" id="act-close" title="Close this document"></button>
   </div>
+
+  <div class="spacer"></div>
+  <div id="doc-name" hidden></div>
   <div class="bar-links">
+    <button type="button" class="tool" id="act-new-top" title="New document" hidden></button>
     <a href="https://github.com/im-Rajat/rkformat">Project</a>
     <a href="https://github.com/im-Rajat/rkformat/blob/main/SPEC.md">Spec</a>
   </div>
 </header>
 
-<!-- Landing: pick a document ------------------------------------------------ -->
+<div id="format-bar" role="toolbar" aria-label="Formatting" hidden></div>
+
+<!-- Landing: pick or create a document -------------------------------------- -->
 <main id="intro">
   <section class="hero">
-    <h1>Read a <code>.rkf</code> document</h1>
+    <h1>Write and read <code>.rkf</code> documents</h1>
     <p class="lede">
       A <code>.rkf</code> file holds Markdown text <em>and</em> every image it references, in
-      one file. Drop one here to read it.
+      one file. Create one here, or open one you already have — it all runs in your browser.
     </p>
 
+    <div class="start-actions">
+      <button type="button" id="act-new" class="primary">New document</button>
+      <button type="button" id="act-open" class="secondary">Open a file&hellip;</button>
+      <button type="button" id="act-demo" class="secondary">Open the demo</button>
+    </div>
+
     <div id="drop" tabindex="0" role="button" aria-label="Choose a .rkf file, or drop one here">
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <path d="M12 16V4m0 0L8 8m4-4 4 4"/>
         <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
       </svg>
-      <p><strong>Drop a .rkf file here</strong></p>
-      <p class="muted small">or click to choose one &middot; or paste a link below</p>
+      <p class="muted small">or drop a <code>.rkf</code> file anywhere on this page</p>
       <input type="file" id="file" accept=".rkf,.rk,application/vnd.rkformat+zip" hidden>
     </div>
 
     <form id="url-form" autocomplete="off">
       <input type="url" id="url" placeholder="https://.../document.rkf" spellcheck="false"
              aria-label="URL of a .rkf file">
-      <button type="submit">Open</button>
+      <button type="submit">Open link</button>
     </form>
 
-    <p class="muted small centre">
-      Or <button type="button" class="link" id="act-demo">open the demo document</button>.
-    </p>
+    <div id="draft-notice" hidden>
+      <span id="draft-text"></span>
+      <button type="button" class="link" id="act-restore">Restore it</button>
+      <button type="button" class="link" id="act-discard">Discard</button>
+    </div>
 
     <p class="privacy">
-      Your file is read <strong>in your browser</strong>. Nothing is uploaded, and this page
+      Everything happens <strong>in your browser</strong>. Nothing is uploaded, and this page
       has no analytics, cookies or third-party requests.
     </p>
   </section>
 
   <section class="explain">
     <div>
+      <h2>A full editor, not just a viewer</h2>
+      <p>
+        Type straight into the page like a word processor, or edit the Markdown source
+        side-by-side. Paste an image and it is embedded in the file. The same four modes and
+        the same formatting toolbar as the VS Code extension.
+      </p>
+    </div>
+    <div>
       <h2>HTML is allowed, safely</h2>
       <p>
         Markdown permits raw HTML, so <code>&lt;img src="assets/x.png" width="200"&gt;</code>
-        works and points at the embedded image. It is rebuilt against an allowlist first, so
-        a document cannot run script in your browser.
+        works and points at the embedded image. It is rebuilt against an allowlist first, so a
+        document cannot run script in your browser.
       </p>
     </div>
     <div>
       <h2>Checksums are verified</h2>
       <p>
-        Every embedded image carries a SHA-256 in the manifest. The viewer recomputes each one
-        with WebCrypto and reports any that do not match, along with dangling references and
-        unused images &mdash; the same checks <code>rk check</code> runs.
+        Every embedded image carries a SHA-256. The page recomputes each one with WebCrypto and
+        reports any that do not match, along with dangling references and unused images —
+        the same checks <code>rk check</code> runs.
       </p>
     </div>
     <div>
       <h2>No server involved</h2>
       <p>
-        A <code>.rkf</code> is a ZIP, so the browser can open it unaided: the central directory
-        gives random access and <code>DecompressionStream</code> handles the rest. This page is
-        static files on GitHub Pages.
-      </p>
-    </div>
-    <div>
-      <h2>Sharing a link</h2>
-      <p>
-        Add <code>?url=</code> and a link to a <code>.rkf</code> to open it directly, for example
-        <code>?url=welcome.rkf</code>. GitHub <code>blob</code> links are rewritten to raw
-        automatically. The host has to allow cross-origin reads.
+        A <code>.rkf</code> is a ZIP, so the browser can both read and write one unaided, using
+        <code>DecompressionStream</code> and <code>CompressionStream</code>. This page is static
+        files on GitHub Pages.
       </p>
     </div>
   </section>
 </main>
 
-<!-- Loaded: the document ---------------------------------------------------- -->
-<main id="reader" hidden>
-  <div id="doc-meta" class="rkf-meta"></div>
-  <article id="page" class="rkf-page"></article>
-  <pre id="source" hidden></pre>
+<!-- The document ----------------------------------------------------------- -->
+<main id="workspace" hidden>
+  <section id="live-pane">
+    <div id="live" class="rkf-page" contenteditable="true" spellcheck="true"
+         role="textbox" aria-multiline="true" aria-label="Document"></div>
+  </section>
+  <section id="source-pane">
+    <textarea id="source" spellcheck="true" aria-label="Markdown source"
+      placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
+  </section>
+  <div id="divider" role="separator" aria-orientation="vertical"></div>
+  <section id="preview-pane">
+    <div id="doc-meta" class="rkf-meta"></div>
+    <article id="preview" class="rkf-page"></article>
+  </section>
 </main>
 
 <aside id="details" hidden>
+  <button class="tool close" id="act-details-close" title="Close">&times;</button>
   <h2>Document</h2>
   <dl id="details-info"></dl>
   <h2>Embedded images</h2>
@@ -123,8 +159,11 @@
 </footer>
 
 <script src="assets/rkf.js"></script>
+<script src="assets/rkfwrite.js"></script>
 <script src="assets/sanitize.js"></script>
 <script src="assets/markdown.js"></script>
-<script src="assets/viewer.js"></script>
+<script src="assets/tomarkdown.js"></script>
+<script src="assets/toolbar.js"></script>
+<script src="assets/app.js"></script>
 </body>
 </html>

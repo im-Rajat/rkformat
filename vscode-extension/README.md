@@ -51,6 +51,13 @@ Pasting into Live mode inserts **plain text**, deliberately: pasted rich HTML fr
 or Word would drag in markup the format cannot represent. Images are the exception and do get
 embedded.
 
+## There is a web version too
+
+[im-rajat.github.io/rkformat](https://im-rajat.github.io/rkformat/) has the same four modes
+and the same toolbar, and can create and save `.rkf` files with nothing installed. This
+extension is the better fit when the documents live in a repo you already have open; the web
+editor is for when you do not want to install anything.
+
 ## Requirements
 
 The extension is a thin shell over the `rk` CLI — all format logic lives in Python, so the

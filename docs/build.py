@@ -40,18 +40,21 @@ def main() -> int:
     # The WYSIWYG serialiser is shared between the browser viewer and the VS Code webview.
     # One canonical copy lives here; the extension gets a generated duplicate, because a
     # packaged extension cannot read files from outside its own directory.
-    serialiser = docs / "assets" / "tomarkdown.js"
-    extension_copy = ROOT / "vscode-extension" / "media" / "tomarkdown.js"
-    if extension_copy.parent.is_dir():
+    media = ROOT / "vscode-extension" / "media"
+    for name in ("tomarkdown.js", "toolbar.js"):
+        source = docs / "assets" / name
+        target = media / name
+        if not media.is_dir():
+            break
         banner = (
             "/* GENERATED COPY - do not edit.\n"
             " *\n"
-            " * Source of truth: docs/assets/tomarkdown.js. Re-run docs/build.py after\n"
-            " * changing it, or the extension and the web viewer will disagree.\n"
+            f" * Source of truth: docs/assets/{name}. Re-run docs/build.py after changing\n"
+            " * it, or the extension and the web editor will disagree.\n"
             " */\n"
         )
-        extension_copy.write_text(banner + serialiser.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"copied {extension_copy.relative_to(ROOT)} ({extension_copy.stat().st_size} bytes)")
+        target.write_text(banner + source.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"copied {target.relative_to(ROOT)} ({target.stat().st_size} bytes)")
 
     demo_source = ROOT / "examples" / "welcome.rkf"
     if not demo_source.is_file():

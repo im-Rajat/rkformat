@@ -87,16 +87,18 @@ file. Send it to someone and the pictures go with it. No `images/` folder, no br
 ## Try these
 
 - **Paste an image.** Copy any picture to your clipboard and press Ctrl+V right here. It
-  gets embedded in this file immediately.
+  gets embedded in this file immediately - in the browser or in VS Code.
 - **Drag a file in.** Drop a PNG or JPEG onto the editor.
 - **Click "Images"** in the toolbar to see everything embedded here, with sizes.
 - **Toggle Live / Source / Split / Preview** to switch layouts. In **Live** you type
   straight into this page, like a word processor.
+- **Create a new document** from the web editor's start screen, and save it back to
+  your machine - no install needed.
 
 ## Checklists work
 
 - [x] Task lists render as real checkboxes
-- [x] In the VS Code editor you can tick them
+- [x] Tick them in the web editor or in VS Code
 - [ ] This one is still open
 
 ## It is still just Markdown

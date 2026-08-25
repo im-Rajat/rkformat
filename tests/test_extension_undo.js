@@ -90,7 +90,9 @@ Module._load = function (request, parent, isMain) {
 };
 
 const source = fs.readFileSync(path.join(root, "vscode-extension/extension.js"), "utf8");
-const probe = path.join(os.tmpdir(), `rkf-extension-probe-${process.pid}.js`);
+// The probe copy has to live beside extension.js: it now requires ./media/toolbar.js, and a
+// copy in /tmp cannot resolve that relative path.
+const probe = path.join(root, "vscode-extension", `.extension-probe-${process.pid}.js`);
 fs.writeFileSync(
   probe,
   `${source}\nmodule.exports.__test = { RkfEditorProvider, RkfDocument };\n`

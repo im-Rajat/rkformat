@@ -61,19 +61,119 @@ body {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.55rem 1rem;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.75rem;
   background: var(--ui-panel);
   border-bottom: 1px solid var(--ui-line);
 }
 
-#bar .brand { font-size: 1.05rem; letter-spacing: -0.01em; }
+#bar .brand { font-size: 1rem; margin-right: 0.3rem; }
 #bar .brand strong { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
-#bar .bar-actions { display: flex; gap: 0.4rem; margin-left: auto; }
-#bar .bar-links { display: flex; gap: 0.9rem; margin-left: auto; font-size: 0.88rem; }
-#bar .bar-actions ~ .bar-links { margin-left: 0.6rem; }
+#bar .spacer { flex: 1 1 auto; }
+#bar .bar-actions { display: flex; align-items: center; gap: 0.15rem; }
+#bar .bar-links { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; }
 #bar a { color: var(--ui-muted); text-decoration: none; }
 #bar a:hover { color: var(--ui-accent); text-decoration: underline; }
+
+#bar .sep, #format-bar .sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 17px;
+  margin: 0 0.2rem;
+  background: var(--ui-line);
+}
+
+#doc-name {
+  font-size: 0.83rem;
+  color: var(--ui-muted);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#doc-name.dirty { color: var(--ui-ink); }
+
+.modes {
+  display: flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--ui-line);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.modes button {
+  padding: 0.2rem 0.7rem;
+  border: 0;
+  border-right: 1px solid var(--ui-line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modes button:last-child { border-right: 0; }
+.modes button:hover { background: rgba(128, 128, 128, 0.15); }
+.modes button.active { background: var(--ui-accent); color: var(--ui-accent-ink); }
+
+button.tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+button.tool:hover { background: rgba(128, 128, 128, 0.18); }
+button.tool.active { background: var(--ui-accent); color: var(--ui-accent-ink); }
+
+#format-bar {
+  position: sticky;
+  top: 0;
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 0.25rem 0.75rem;
+  background: var(--ui-panel);
+  border-bottom: 1px solid var(--ui-line);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+#format-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+#format-bar button:hover { background: rgba(128, 128, 128, 0.18); }
+#format-bar .glyph { line-height: 1; font-size: 1.05em; }
+#format-bar .glyph-bold .glyph { font-weight: 700; }
+#format-bar .glyph-italic .glyph { font-style: italic; font-family: Georgia, serif; }
+#format-bar .glyph-strike .glyph { text-decoration: line-through; }
+#format-bar .glyph-code .glyph { font-family: ui-monospace, monospace; font-size: 0.8em; }
 
 button {
   font: inherit;
@@ -119,12 +219,42 @@ button.link {
 .hero h1 code, .hero code { font-family: ui-monospace, "SF Mono", Consolas, monospace; }
 .hero .lede { margin: 0 auto 1.8rem; color: var(--ui-muted); max-width: 30rem; }
 
+.start-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.start-actions button {
+  padding: 0.5rem 1.1rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.start-actions .primary {
+  border: 1px solid var(--ui-accent);
+  background: var(--ui-accent);
+  color: var(--ui-accent-ink);
+}
+
+.start-actions .secondary {
+  border: 1px solid var(--ui-line);
+  background: var(--ui-panel);
+  color: inherit;
+}
+
+.start-actions .secondary:hover { border-color: var(--ui-accent); color: var(--ui-accent); }
+
 #drop {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.15rem;
-  padding: 2.4rem 1.5rem;
+  gap: 0.3rem;
+  padding: 1.4rem 1.5rem;
   border: 2px dashed var(--ui-line);
   border-radius: 10px;
   background: var(--ui-panel);
@@ -135,8 +265,23 @@ button.link {
 
 #drop:hover, #drop:focus-visible { border-color: var(--ui-accent); color: var(--ui-accent); outline: none; }
 #drop p { margin: 0; }
-#drop strong { color: var(--ui-ink); }
-#drop:hover strong, #drop:focus-visible strong { color: var(--ui-accent); }
+
+#draft-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ui-warn);
+  border-radius: 7px;
+  background: var(--ui-warn-bg);
+  color: var(--ui-warn);
+  font-size: 0.85rem;
+}
+
+#draft-notice .link { color: inherit; }
 
 #url-form {
   display: flex;
@@ -191,31 +336,104 @@ button.link {
 .explain p { margin: 0; color: var(--ui-muted); font-size: 0.88rem; }
 .explain code { font-size: 0.85em; background: var(--ui-panel); padding: 0.1em 0.3em; border-radius: 3px; }
 
-/* -------------------------------------------------------------------- reader */
+/* ------------------------------------------------------------------ workspace */
 
-#reader { flex: 1 1 auto; padding-bottom: 3rem; }
+/* The editing surface. Structurally this mirrors the VS Code webview (same ids, same
+   data-layout / data-width switches) but it is styled from this site's palette rather than
+   VS Code's theme variables, so the two are deliberately not sharing a stylesheet. */
 
-#reader .rkf-meta { padding-top: 1.25rem; }
+#workspace {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
 
-#source {
+#live-pane, #source-pane, #preview-pane {
+  min-width: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+#live-pane { flex: 1 1 100%; }
+#source-pane { flex: 1 1 50%; display: flex; }
+#preview-pane { flex: 1 1 50%; }
+
+#divider { flex: 0 0 1px; background: var(--ui-line); }
+
+#workspace[data-layout="live"] #source-pane,
+#workspace[data-layout="live"] #preview-pane,
+#workspace[data-layout="live"] #divider { display: none; }
+
+#workspace[data-layout="source"] #live-pane,
+#workspace[data-layout="source"] #preview-pane,
+#workspace[data-layout="source"] #divider { display: none; }
+
+#workspace[data-layout="split"] #live-pane { display: none; }
+
+#workspace[data-layout="preview"] #live-pane,
+#workspace[data-layout="preview"] #source-pane,
+#workspace[data-layout="preview"] #divider { display: none; }
+
+/* Editing wants width, reading wants a measure. `full` drops the paper-card look that
+   document.css gives .rkf-page; `page` puts it back. */
+body[data-width="full"] #live,
+body[data-width="full"] #preview {
+  max-width: none;
+  margin: 0;
+  padding: 1.75rem clamp(1rem, 6%, 5.5rem) 6rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body[data-width="page"] #live-pane,
+body[data-width="page"] #preview-pane { background: var(--rkf-desk, var(--ui-bg)); }
+
+body[data-width="page"] #live,
+body[data-width="page"] #preview {
   max-width: 46rem;
   margin: 1.5rem auto;
-  padding: 1.5rem;
-  background: var(--ui-panel);
-  border: 1px solid var(--ui-line);
-  border-radius: 6px;
+  padding: 2.5rem 3rem 4rem;
+}
+
+@media (max-width: 45rem) {
+  body[data-width="page"] #live,
+  body[data-width="page"] #preview { margin: 0; padding: 1.25rem 1.25rem 3rem; }
+}
+
+#live { min-height: 60vh; outline: none; }
+#live:empty::before {
+  content: "Start writing. Paste or drop an image to embed it in this file.";
+  color: var(--ui-muted);
+}
+#live table { table-layout: auto; }
+#live td:empty::after, #live th:empty::after { content: "\200b"; }
+#live img:hover { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+#live input[type="checkbox"] { cursor: pointer; }
+
+#preview-pane .rkf-meta { padding-top: 1rem; }
+
+#source {
+  flex: 1 1 auto;
+  width: 100%;
+  border: 0;
+  resize: none;
+  outline: none;
+  padding: 1.25rem clamp(1rem, 4%, 3rem);
+  background: var(--ui-bg);
+  color: var(--ui-ink);
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   line-height: 1.65;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
+  tab-size: 2;
 }
 
 /* ------------------------------------------------------------------- details */
 
 #details {
   position: fixed;
+  padding-top: 2.2rem;
   top: 0;
   right: 0;
   z-index: 30;
@@ -237,6 +455,14 @@ button.link {
 }
 
 #details h2:first-child { margin-top: 0.3rem; }
+
+#details .close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
 
 #details dl {
   display: grid;
@@ -358,8 +584,8 @@ button.link {
 }
 
 @media print {
-  #bar, #foot, #status, #details, #drop-overlay, #intro { display: none !important; }
+  #bar, #format-bar, #foot, #status, #details, #drop-overlay, #intro { display: none !important; }
   body { background: #fff; }
-  #reader .rkf-meta { display: none; }
+  #source-pane, #live-pane, #divider, #doc-meta { display: none !important; }
   .rkf-page { box-shadow: none; border: 0; margin: 0; padding: 0; max-width: none; }
 }

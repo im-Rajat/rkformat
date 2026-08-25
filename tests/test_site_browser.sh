@@ -91,9 +91,12 @@ check "images became blob URLs"   '-ge 3' 'src="blob:'                 "$work/de
 check "figures with captions"     '-ge 1' '<figcaption>'               "$work/demo.html"
 check "table rendered"            '-ge 1' '<thead>'                    "$work/demo.html"
 check "fenced code rendered"      '-ge 1' 'class="language-bash"'      "$work/demo.html"
+check "task list rendered"        '-ge 1' 'type="checkbox"'            "$work/demo.html"
 check "checksums verified"        '-ge 3' 'sha256'                     "$work/demo.html"
 check "no dangling images"        '-eq 0' 'rkf-missing'                "$work/demo.html"
 check "no script leaked"          '-eq 0' '<script>alert'              "$work/demo.html"
+check "editor toolbar present"    '-ge 15' 'data-format='              "$work/demo.html"
+check "mode switcher present"     '-ge 4' 'data-layout='               "$work/demo.html"
 
 echo "--- a tampered document must be reported ---"
 python3 - "$root" "$work" <<'PY'
@@ -123,6 +126,13 @@ rm -f "$root/docs/_test_plain.rkf"
 echo "--- a missing file ---"
 dump "?url=_test_absent.rkf" > "$work/absent.html"
 check "404 reported" '-ge 1' 'answered 404' "$work/absent.html"
+
+echo "--- the web editor: create, type, format, embed, undo, save ---"
+python3 "$root/tests/make_site_harness.py" "$root/tests/site_harness.generated.html" >/dev/null
+"$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=30000 \
+  --dump-dom "http://localhost:$port/tests/site_harness.generated.html" 2>/dev/null > "$work/site.html"
+summary_check "the web editor works end to end" "$work/site.html" "harness-summary"
+rm -f "$root/tests/site_harness.generated.html"
 
 echo "--- WYSIWYG round trip (rendering must be stable) ---"
 dump_page "tests/wysiwyg_roundtrip.html" > "$work/roundtrip.html"

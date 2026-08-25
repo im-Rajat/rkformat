@@ -237,27 +237,54 @@
    * Creates the list first if the caret is not in one, which is what a word processor does
    * when you click a list button on a bare paragraph.
    */
+  /**
+   * Turn the block at the caret into a task item, or back into a plain one.
+   *
+   * Done by moving nodes rather than with execCommand: asking the browser to make a list out
+   * of a heading nests the <ul> *inside* the <h2>, which the serialiser then flattens back to
+   * a heading - silently losing the checkbox. Chaining formatBlock first does not help, since
+   * the selection does not survive it reliably.
+   */
   function toggleTask() {
-    let item = closest("li");
-    if (!item) {
-      document.execCommand("insertUnorderedList", false, null);
-      item = closest("li");
-      if (!item) return;
-    }
-    const host = item.querySelector(":scope > p") || item;
-    const existing = item.querySelector(
-      ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
-    );
-    if (existing) {
-      existing.remove();
-      item.classList.remove("rkf-task");
-    } else {
+    const checkbox = () => {
       const box = document.createElement("input");
       box.type = "checkbox";
       box.setAttribute("contenteditable", "false");
-      item.classList.add("rkf-task");
-      host.insertBefore(box, host.firstChild);
+      return box;
+    };
+
+    const item = closest("li");
+    if (item) {
+      const host = item.querySelector(":scope > p") || item;
+      const existing = item.querySelector(
+        ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
+      );
+      if (existing) {
+        existing.remove();
+        item.classList.remove("rkf-task");
+      } else {
+        item.classList.add("rkf-task");
+        host.insertBefore(checkbox(), host.firstChild);
+      }
+      return;
     }
+
+    const block = closest("p, h1, h2, h3, h4, h5, h6, blockquote") || live.lastElementChild;
+    if (!block || !live.contains(block)) return;
+    const list = document.createElement("ul");
+    const listItem = document.createElement("li");
+    listItem.className = "rkf-task";
+    listItem.appendChild(checkbox());
+    while (block.firstChild) listItem.appendChild(block.firstChild);
+    list.appendChild(listItem);
+    block.replaceWith(list);
+
+    const range = document.createRange();
+    range.selectNodeContents(listItem);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
   /**

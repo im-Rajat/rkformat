@@ -160,6 +160,104 @@
     return null;
   }
 
+  /**
+   * Pixel dimensions from the magic bytes. Ported from rkformat/imageinfo.py.
+   *
+   * Done by hand rather than via createImageBitmap so it stays synchronous and testable
+   * outside a browser, and so it agrees with what the Python library records.
+   */
+  function imageSize(bytes, mediaType) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const none = { width: null, height: null };
+    try {
+      if (mediaType === "image/png") {
+        if (bytes.byteLength >= 24 && utf8.decode(bytes.subarray(12, 16)) === "IHDR") {
+          return { width: view.getUint32(16), height: view.getUint32(20) };
+        }
+        return none;
+      }
+      if (mediaType === "image/jpeg") {
+        // Walk the segment chain to the start-of-frame marker, which carries the size.
+        const SOF = new Set([
+          0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+        ]);
+        let pos = 2;
+        while (pos + 3 < bytes.byteLength) {
+          if (bytes[pos] !== 0xff) {
+            pos += 1; // resync past padding
+            continue;
+          }
+          const marker = bytes[pos + 1];
+          if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+            pos += 2;
+            continue;
+          }
+          if (marker === 0xd9 || marker === 0xda) break;
+          const length = view.getUint16(pos + 2);
+          if (SOF.has(marker) && pos + 9 <= bytes.byteLength) {
+            return { height: view.getUint16(pos + 5), width: view.getUint16(pos + 7) };
+          }
+          if (length < 2) break;
+          pos += 2 + length;
+        }
+        return none;
+      }
+      if (mediaType === "image/gif") {
+        if (bytes.byteLength >= 10) {
+          return { width: view.getUint16(6, true), height: view.getUint16(8, true) };
+        }
+        return none;
+      }
+      if (mediaType === "image/webp") {
+        const chunk = utf8.decode(bytes.subarray(12, 16));
+        if (chunk === "VP8 " && bytes.byteLength >= 30) {
+          return {
+            width: view.getUint16(26, true) & 0x3fff,
+            height: view.getUint16(28, true) & 0x3fff,
+          };
+        }
+        if (chunk === "VP8L" && bytes.byteLength >= 25) {
+          const bits = view.getUint32(21, true);
+          return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+        }
+        if (chunk === "VP8X" && bytes.byteLength >= 30) {
+          const read24 = (offset) =>
+            bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+          return { width: read24(24) + 1, height: read24(27) + 1 };
+        }
+        return none;
+      }
+      if (mediaType === "image/bmp") {
+        if (bytes.byteLength >= 26) {
+          return {
+            width: Math.abs(view.getInt32(18, true)),
+            height: Math.abs(view.getInt32(22, true)),
+          };
+        }
+        return none;
+      }
+      if (mediaType === "image/svg+xml") {
+        const head = utf8.decode(bytes.subarray(0, 4096));
+        const dimensions = {};
+        for (const match of head.matchAll(/(width|height)\s*=\s*["']\s*([0-9.]+)/gi)) {
+          const name = match[1].toLowerCase();
+          if (dimensions[name] === undefined) dimensions[name] = parseFloat(match[2]);
+        }
+        if (dimensions.width !== undefined && dimensions.height !== undefined) {
+          return { width: Math.trunc(dimensions.width), height: Math.trunc(dimensions.height) };
+        }
+        const box = /viewBox\s*=\s*["']\s*[-0-9.]+[\s,]+[-0-9.]+[\s,]+([0-9.]+)[\s,]+([0-9.]+)/i.exec(head);
+        if (box) {
+          return { width: Math.trunc(parseFloat(box[1])), height: Math.trunc(parseFloat(box[2])) };
+        }
+        return none;
+      }
+    } catch (err) {
+      return none; // truncated or malformed header; the manifest simply omits the size
+    }
+    return none; // TIFF, AVIF and HEIC need a real decoder
+  }
+
   // ------------------------------------------------------------------ references
 
   /** Blank out code spans and fences, preserving offsets. Mirrors container._mask_code. */
@@ -203,6 +301,8 @@
       this.manifest = null;
       this.assets = [];
       this.problems = [];
+      // Findings that describe the container rather than the text; see revalidate().
+      this.integrityProblems = [];
       this.extras = [];
       this.storedSizes = new Map();
       this._blobs = new Map(); // archive path -> Uint8Array
@@ -288,6 +388,120 @@
         if (asset) used.add(asset.id);
       }
       return this.assets.filter((asset) => !used.has(asset.id));
+    }
+
+    // ---------------------------------------------------------------- mutation
+
+    /** Lowest unused `aN` identifier. Mirrors Manifest.next_id in manifest.py. */
+    nextId() {
+      const used = new Set(this.assets.map((asset) => asset.id));
+      let n = 1;
+      while (used.has(`a${n}`)) n += 1;
+      return `a${n}`;
+    }
+
+    /** An `assets/<name>` path that collides with nothing, case-insensitively. */
+    uniquePath(filename) {
+      const dot = String(filename).lastIndexOf(".");
+      let stem = dot > 0 ? filename.slice(0, dot) : filename;
+      let extension = dot > 0 ? filename.slice(dot + 1) : "";
+      stem = stem.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "") || "image";
+      extension = extension.replace(/[^A-Za-z0-9]+/g, "").toLowerCase();
+      const taken = new Set(this.assets.map((asset) => asset.path.toLowerCase()));
+      for (let n = 0; ; n += 1) {
+        const suffix = n === 0 ? "" : `-${n}`;
+        const candidate = `${ASSET_DIR}/${stem}${suffix}${extension ? `.${extension}` : ""}`;
+        if (!taken.has(candidate.toLowerCase())) return candidate;
+      }
+    }
+
+    /**
+     * Embed image bytes, returning the asset record.
+     *
+     * Identical bytes are stored once: assets are keyed by SHA-256, same as the Python
+     * library, so pasting the same screenshot twice does not double the file size.
+     */
+    async addImageBytes(bytes, filename, alt) {
+      const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      if (!payload.length) throw new RkfError(`${filename}: empty image payload`);
+      const mediaType = sniffMediaType(payload);
+      if (mediaType === null) {
+        throw new RkfError(`${filename}: not a recognised image`);
+      }
+      const digest = await sha256Hex(payload);
+      const existing = this.assets.find((asset) => digest && asset.sha256 === digest);
+      if (existing) return existing;
+
+      const info = imageSize(payload, mediaType);
+      const asset = {
+        id: this.nextId(),
+        path: this.uniquePath(filename || "image.png"),
+        media_type: mediaType,
+        bytes: payload.length,
+        sha256: digest || "",
+        width: info.width,
+        height: info.height,
+        alt: alt || null,
+        verified: true,
+      };
+      this._blobs.set(asset.path, payload);
+      this.assets.push(asset);
+      return asset;
+    }
+
+    /** Drop an asset by id, path, or filename. Optionally strip its references too. */
+    removeAsset(ref, options = {}) {
+      const asset =
+        this.assets.find((a) => a.id === ref) ||
+        this.assets.find((a) => a.path === ref) ||
+        this.assets.find((a) => a.path === `${ASSET_DIR}/${ref}`) ||
+        this.assets.find((a) => a.path.split("/").pop() === ref);
+      if (!asset) throw new RkfError(`no such asset: ${ref}`);
+      this.assets = this.assets.filter((a) => a !== asset);
+      this._blobs.delete(asset.path);
+      const url = this._urls.get(asset.path);
+      if (url) {
+        URL.revokeObjectURL(url);
+        this._urls.delete(asset.path);
+      }
+      if (options.pruneRefs) {
+        const targets = [asset.path, asset.path.split("/").pop(), `rkf:${asset.id}`]
+          .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("|");
+        this.markdown = this.markdown.replace(
+          new RegExp(`[ \\t]*!\\[(?:[^\\]\\\\]|\\\\.)*\\]\\(\\s*(?:${targets})[^)]*\\)[ \\t]*\\n?`, "g"),
+          ""
+        );
+      }
+      return asset;
+    }
+
+    /**
+     * Recompute the problems that depend on the body text.
+     *
+     * Integrity findings - a bad checksum, a missing payload, a media type that does not
+     * match the bytes - are established once when the file is read and cannot change by
+     * editing prose, so they are kept aside and merged back in here. Rebuilding the whole
+     * list from scratch would silently drop them.
+     */
+    revalidate() {
+      this.problems = (this.integrityProblems || []).slice();
+      for (const reference of findReferences(this.markdown)) {
+        if (isExternal(reference.target)) continue;
+        if (!this.resolve(reference.target)) {
+          this.problems.push({
+            severity: "error",
+            message: `dangling image reference: ${reference.target}`,
+          });
+        }
+      }
+      for (const asset of this.orphanAssets()) {
+        this.problems.push({
+          severity: "info",
+          message: `asset ${asset.id} (${asset.path}) is never referenced`,
+        });
+      }
+      return this.problems;
     }
 
     /** Release blob: URLs. Call before dropping a document. */
@@ -462,6 +676,9 @@
     for (const entry of entries) {
       if (known.has(entry.name) || entry.name.endsWith("/")) continue;
       doc.extras.push(entry.name);
+      // Keep the bytes, not just the name: SPEC.md section 2 requires a reader to preserve
+      // members it does not understand when it writes the document back out.
+      doc._blobs.set(entry.name, await readMember(buffer, entry));
       if (entry.name.startsWith(`${ASSET_DIR}/`)) {
         doc.problems.push({
           severity: "warning",
@@ -469,6 +686,10 @@
         });
       }
     }
+
+    // Everything found so far describes the container itself. Snapshot it, so that editing
+    // the body later cannot make a corrupt asset look clean.
+    doc.integrityProblems = doc.problems.slice();
 
     for (const reference of findReferences(doc.markdown)) {
       if (isExternal(reference.target)) continue;
@@ -489,6 +710,24 @@
     return doc;
   }
 
+  /** Start an empty document, for "new file" in an editor. */
+  function create(options = {}) {
+    const now = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+    const doc = new RkfDocument(new Uint8Array(0));
+    doc.manifest = {
+      rkf_version: "1.0",
+      generator: "rkformat-web/0.1.0",
+      title: options.title || null,
+      authors: options.authors || [],
+      created: now,
+      modified: now,
+      content: "content.md",
+      assets: [],
+    };
+    doc.markdown = options.markdown || "";
+    return doc;
+  }
+
   /** Magic-byte probe, per SPEC.md section 2.1 - cheap enough to run before parsing. */
   function looksLikeRkf(bytes) {
     const head = utf8.decode(bytes.subarray(0, 38 + MIMETYPE.length));
@@ -504,9 +743,13 @@
 
   global.RKF = Object.assign(global.RKF || {}, {
     open,
+    create,
+    RkfDocument,
+    sha256Hex,
     looksLikeRkf,
     findReferences,
     sniffMediaType,
+    imageSize,
     isExternal,
     RkfError,
     MIMETYPE,

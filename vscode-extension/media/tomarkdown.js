@@ -1,7 +1,7 @@
 /* GENERATED COPY - do not edit.
  *
- * Source of truth: docs/assets/tomarkdown.js. Re-run docs/build.py after
- * changing it, or the extension and the web viewer will disagree.
+ * Source of truth: docs/assets/tomarkdown.js. Re-run docs/build.py after changing
+ * it, or the extension and the web editor will disagree.
  */
 /**
  * HTML -> Markdown, for WYSIWYG editing.

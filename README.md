@@ -155,10 +155,22 @@ Three routes, in increasing order of fidelity:
 3. **`rk cat doc.rkf`**, or *RK: View Markdown as Plain Text* in VS Code, which opens the
    body as a read-only `.md` editor with highlighting and search.
 
-## Read one in the browser
+## Write and read one in the browser
 
-[**im-rajat.github.io/rkformat**](https://im-rajat.github.io/rkformat/) opens a `.rkf`
-without installing anything. Drop a file on it, paste a link, or share a deep link:
+[**im-rajat.github.io/rkformat**](https://im-rajat.github.io/rkformat/) is a full editor, not
+just a viewer. Nothing to install:
+
+- **New document** — start from an empty file and write. It works as a notepad that happens
+  to save real `.rkf` files.
+- **The same four modes** as the VS Code extension — Live, Source, Split, Preview — and the
+  same formatting toolbar, generated from the same
+  [toolbar definition](docs/assets/toolbar.js).
+- **Paste or drop an image** and it is embedded in the file, checksum and all.
+- **Save** with Ctrl+S. Where the browser supports the File System Access API (Chromium) that
+  overwrites the file you opened; elsewhere it downloads. **Save a copy** always prompts.
+- **Unsaved work is kept in IndexedDB**, so closing the tab does not lose a document — the
+  whole `.rkf` is stored, images included.
+- Open a file, or share a deep link:
 
 ```
 https://im-rajat.github.io/rkformat/?url=https://github.com/you/repo/blob/main/notes.rkf
@@ -167,32 +179,33 @@ https://im-rajat.github.io/rkformat/?url=https://github.com/you/repo/blob/main/n
 GitHub `blob` links are rewritten to `raw.githubusercontent.com` automatically. Any other
 host has to allow cross-origin reads; otherwise download the file and drop it in.
 
-The whole thing is client-side. A `.rkf` is a ZIP, so the browser can open one unaided —
-the central directory gives random access and `DecompressionStream('deflate-raw')` handles
-the compressed members. Every asset's SHA-256 is recomputed with WebCrypto, so the site
-runs the same integrity checks as `rk check`. **Nothing is uploaded**, and the page makes no
-third-party requests.
+**Everything is client-side.** A `.rkf` is a ZIP, so the browser both reads one
+(`DecompressionStream`) and writes one (`CompressionStream`) unaided — see
+[rkfwrite.js](docs/assets/rkfwrite.js), which follows the same member ordering, compression
+policy and determinism rules as the Python writer. Every asset's SHA-256 is recomputed with
+WebCrypto. Nothing is uploaded, and the page makes no third-party requests.
 
-It lives in [docs/](docs/) and is served by GitHub Pages from that folder — static files,
-no build step, no dependencies.
+It lives in [docs/](docs/) and is served by GitHub Pages from that folder — static files, no
+build step, no dependencies.
 
-### The one place this project has two implementations
+### Keeping two implementations honest
 
-The site cannot call the Python renderer the way the VS Code extension does, so
-[docs/assets/markdown.js](docs/assets/markdown.js) is a second Markdown implementation.
-That is a real risk of drift, handled two ways:
+The site cannot call Python, so some things necessarily exist twice. Three mechanisms keep
+them from drifting:
 
-- **Styling cannot drift.** `docs/assets/document.css` is generated from
-  `rkformat.render.PAGE_CSS` by [docs/build.py](docs/build.py).
-- **Rendering is diffed.** [tests/test_site_parity.js](tests/test_site_parity.js) renders 57
-  fixtures — including nested emphasis, tight and loose lists, tables, and script-injection
-  attempts — through both renderers and compares the HTML. Where they disagree, `rk render`
-  is canonical.
+- **Shared source where it is possible.** The renderer, the sanitiser, the HTML→Markdown
+  serialiser and the toolbar definition live once in `docs/assets/` and the extension gets
+  generated copies from [docs/build.py](docs/build.py), which a test asserts are current.
+  The stylesheet is generated from `rkformat.render.PAGE_CSS` the same way.
+- **Rendering is diffed.** [tests/test_site_parity.js](tests/test_site_parity.js) renders 110
+  fixtures — nested emphasis, tight and loose lists, tables, entities, raw HTML and
+  script-injection attempts — through both renderers and compares the HTML.
+- **Writing is cross-checked.** [tests/test_web_write.js](tests/test_web_write.js) builds
+  documents with the browser writer and hands them to the Python `rk check`. If Python
+  verifies every checksum and returns the body intact, the two agree on the format.
 
-Building that test immediately paid for itself: it caught a broken regex that silently
-disabled every inline link and image, `***text***` emitting overlapping tags, and a
-`linkify` setting whose effect depended on whether an optional package happened to be
-installed.
+That last one is the important one: writing a container is exactly where two implementations
+quietly diverge, and checking JavaScript against itself would prove nothing.
 
 ## Edit it in VS Code
 
@@ -268,8 +281,9 @@ python3 tests/test_rkformat.py
 
 node tests/test_site_parity.js   # browser renderer vs. `rk render`, 102 fixtures
 node tests/test_extension_undo.js  # the extension's undo/redo stack, against a vscode stub
-tests/test_site_browser.sh       # headless Chrome: the viewer, the WYSIWYG round trip,
-                                 # and live editing driven through the real webview shell
+node tests/test_web_write.js     # the browser writer, validated by the Python CLI
+tests/test_site_browser.sh       # headless Chrome: the web editor end to end, the WYSIWYG
+                                 # round trip, and live editing in the real webview shell
 ```
 
 The Python suite covers round-tripping, determinism, reference resolution (including
@@ -293,17 +307,18 @@ the webview's actual HTML out of `extension.js`, so the test cannot drift from w
 | [src/rkformat/sanitize.py](src/rkformat/sanitize.py) | HTML allowlist for author markup |
 | [src/rkformat/cli.py](src/rkformat/cli.py) | The `rk` command |
 | [vscode-extension/](vscode-extension/) | VS Code custom editor |
-| [docs/](docs/) | The browser viewer, served by GitHub Pages |
+| [docs/](docs/) | The web editor, served by GitHub Pages |
+| [docs/assets/rkfwrite.js](docs/assets/rkfwrite.js) | Writes `.rkf` in the browser |
+| [docs/assets/toolbar.js](docs/assets/toolbar.js) | Toolbar shared with the extension |
 | [examples/](examples/) | A demo document and the script that builds it |
 
 ## Possible next steps
 
+- **A recent-documents list** in the web editor. Drafts already live in IndexedDB; keeping
+  more than one and listing them is a small step from here.
+
 - A **text-safe variant** (MIME multipart with base64 parts) for channels that only carry
   text, as a `--text-safe` export alongside the canonical ZIP.
-- **Editing in the browser viewer.** It is read-only today; writing a ZIP client-side with
-  `CompressionStream` is very doable, but saving back to wherever the file came from is the
-  actual problem. The WYSIWYG editor and the serialiser it needs already exist and are
-  browser-side, so this is mostly a save-target question.
 - **Markdown input rules in Live mode** — typing `# ` or `- ` at the start of a line could
   format as you go, the way a word processor autocorrects. Today formatting is by toolbar
   and keyboard shortcut.
