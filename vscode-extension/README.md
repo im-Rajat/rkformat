@@ -36,6 +36,8 @@ Opens `.rkf` and `.rk` files as a real editor instead of a binary blob, in four 
   highlighting, search and outline.
 - Commands for packing a `.md` file into a `.rkf`, unpacking back to a folder, exporting
   self-contained HTML, and sweeping unreferenced images.
+- **RK: Share as Self-Viewing HTML** writes one file you can send to someone with nothing
+  installed: it displays the document offline and contains the original `.rkf`.
 
 ### About Live mode
 

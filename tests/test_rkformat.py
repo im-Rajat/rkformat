@@ -363,6 +363,163 @@ def test_in_memory_document_falls_back_to_uncompressed_sizes():
     assert doc.asset_stored_total == doc.asset_bytes_total == len(DIAGRAM)
 
 
+def _corrupt_member(path: Path, member: str, *, offset: int = 8, length: int = 12) -> None:
+    """Overwrite bytes inside one archive member's stored data, breaking its CRC.
+
+    The member's payload has to be located properly rather than by searching for a signature:
+    a deflated asset's original bytes never appear in the file, so searching finds nothing and
+    silently corrupts the header instead - which is how an earlier version of this test ended
+    up exercising the wrong code path.
+    """
+    with zipfile.ZipFile(path) as zf:
+        info = zf.getinfo(member)
+    # Our writer emits no extra field, so the data starts right after the local header.
+    data_start = info.header_offset + 30 + len(info.filename.encode("utf-8"))
+    raw = bytearray(path.read_bytes())
+    assert data_start + offset + length <= len(raw), "member payload is too small to corrupt"
+    raw[data_start + offset : data_start + offset + length] = b"X" * length
+    path.write_bytes(bytes(raw))
+
+
+def test_a_damaged_asset_is_reported_not_raised(tmp_path):
+    """`rk check` exists to diagnose damaged files, so damage must not crash the reader.
+
+    Corrupting an asset's stored bytes breaks its ZIP CRC, and zipfile raises BadZipFile from
+    read(). That used to escape as a traceback from every command that opened the file.
+    """
+    doc = sample()
+    path = doc.save(tmp_path / "s.rkf")
+    _corrupt_member(path, "assets/diagram.png")
+
+    reopened = RkDocument.open(path, strict=False)  # opens rather than exploding
+    messages = [p.message for p in reopened.validate() if p.severity == "error"]
+    assert any("cannot be read" in m for m in messages), messages
+    assert reopened.markdown == doc.markdown, "the body is still readable"
+    try:
+        reopened.check()
+    except RkfValidationError as exc:
+        assert "cannot be read" in str(exc)
+    else:
+        raise AssertionError("a damaged member should fail validation")
+
+
+def test_a_damaged_body_is_a_clear_error(tmp_path):
+    """The body is not optional, so damage there is fatal - but with a readable message."""
+    doc = sample()
+    path = doc.save(tmp_path / "s.rkf")
+    _corrupt_member(path, "content.md")
+
+    try:
+        RkDocument.open(path, strict=False)
+    except RkfFormatError as exc:
+        assert "content.md" in str(exc), exc
+        assert "damaged" in str(exc), exc
+    else:
+        raise AssertionError("a damaged body should be reported as a format error")
+
+
+# ------------------------------------------------------------------ sharing
+
+
+def _extract_payload(page: str) -> bytes:
+    """Pull the embedded .rkf back out of a shared page, the way the page itself does."""
+    import base64 as _base64
+
+    match = re.search(
+        r'<script id="rkf-payload" type="application/base64">(.*?)</script>', page, re.S
+    )
+    assert match, "the shared page has no payload"
+    return _base64.b64decode("".join(match.group(1).split()))
+
+
+def test_share_page_carries_the_original_byte_for_byte(tmp_path):
+    """The whole promise: what comes out of the page is the file that went in."""
+    from rkformat.share import build_share_page
+
+    doc = sample()
+    doc.add_image_bytes(PHOTO, "photo.png", alt="A photo")
+    doc.markdown += "\n" + markdown_ref(doc.assets[-1]) + "\n"
+    path = doc.save(tmp_path / "original.rkf")
+    payload = path.read_bytes()
+
+    page = build_share_page(doc, payload, filename="original.rkf")
+    assert _extract_payload(page) == payload
+
+    # ...and it is still a valid document once recovered.
+    recovered = tmp_path / "recovered.rkf"
+    recovered.write_bytes(_extract_payload(page))
+    reopened = RkDocument.open(recovered)
+    assert reopened.markdown == doc.markdown
+    assert len(reopened.assets) == 2
+    reopened.check()
+
+
+def test_share_page_is_self_contained(tmp_path):
+    """A recipient double-clicks it offline, so it must not depend on anything external."""
+    from rkformat.share import WEB_MODULES, build_share_page
+
+    doc = sample()
+    payload = doc.save(tmp_path / "s.rkf").read_bytes()
+    page = build_share_page(doc, payload, filename="s.rkf")
+
+    assert "<script src=" not in page, "no external script may be referenced"
+    assert "<link " not in page, "no external stylesheet may be referenced"
+    for module in WEB_MODULES:
+        marker = {"rkf.js": "function looksLikeRkf", "sanitize.js": "function sanitize",
+                  "markdown.js": "function render"}[module]
+        assert marker in page, f"{module} was not inlined"
+    assert "PAGE_CSS" not in page  # the stylesheet is inlined, not named
+    assert ".rkf-page" in page
+
+    # The only URLs are ones a person clicks, never something fetched on load.
+    urls = set(re.findall(r"https?://[^\s\"'<>)]+", page))
+    assert all("im-rajat.github.io" in url or "example.com" in url for url in urls), urls
+
+
+def test_share_page_falls_back_to_text_without_scripting(tmp_path):
+    from rkformat.share import build_share_page
+
+    doc = sample()
+    doc.markdown = "# Heading\n\nA distinctive sentence & an <angle> bracket.\n"
+    payload = doc.save(tmp_path / "s.rkf").read_bytes()
+    page = build_share_page(doc, payload)
+
+    assert "<noscript>" in page
+    assert "A distinctive sentence" in page
+    # The fallback holds the Markdown escaped, so it cannot inject markup.
+    assert "&amp; an &lt;angle&gt; bracket" in page
+
+
+def test_share_page_escapes_the_title(tmp_path):
+    from rkformat.share import build_share_page
+
+    doc = sample()
+    doc.manifest.title = '</title><script>alert(1)</script>'
+    payload = doc.save(tmp_path / "s.rkf").read_bytes()
+    page = build_share_page(doc, payload)
+    assert "<script>alert(1)</script>" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+
+
+def test_share_template_rejects_unfilled_placeholders():
+    from rkformat.share import fill_template
+
+    try:
+        fill_template("<p>{{TITLE}} {{MISSING}}</p>", {"TITLE": "x"})
+    except RkfError as exc:
+        assert "MISSING" in str(exc)
+    else:
+        raise AssertionError("an unfilled placeholder was accepted")
+
+
+def test_share_template_survives_css_and_js_braces():
+    """Plain replacement, not str.format - the template is full of braces."""
+    from rkformat.share import fill_template
+
+    template = "<style>a { color: red; }</style><script>if (x) { y(); }</script>{{TITLE}}"
+    assert fill_template(template, {"TITLE": "ok"}).endswith("ok")
+
+
 # ---------------------------------------------------------------- generated files
 
 

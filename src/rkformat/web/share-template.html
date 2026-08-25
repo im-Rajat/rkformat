@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{TITLE}}</title>
+<!--
+  A self-viewing .rkf document.
+
+  This file contains the original {{FILENAME}} in full, base64-encoded near the end, and
+  unpacks it in your browser to display it. Nothing is uploaded and no network request is
+  made. Use the Download button to get the original file back, byte for byte.
+
+  Template: docs/assets/share-template.html. Filled by `rk share` and by the web editor, so
+  both produce the same artifact.
+-->
+<style>{{DOCUMENT_CSS}}
+.rkf-share-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: .6rem 1rem;
+  background: var(--rkf-page);
+  border-bottom: 1px solid var(--rkf-rule);
+  font: 13px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+.rkf-share-bar .title { font-weight: 600; }
+.rkf-share-bar .muted { color: var(--rkf-muted); }
+.rkf-share-bar .spacer { flex: 1 1 auto; }
+.rkf-share-bar a {
+  padding: .3rem .7rem;
+  border: 1px solid var(--rkf-rule);
+  border-radius: 5px;
+  color: var(--rkf-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rkf-share-bar a:hover { border-color: var(--rkf-accent); }
+.rkf-share-bar a[hidden] { display: none; }
+.rkf-fallback {
+  max-width: 46em;
+  margin: 2rem auto;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--rkf-rule);
+  border-radius: 6px;
+  background: var(--rkf-code-bg);
+  white-space: pre-wrap;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: .85em;
+}
+.rkf-problem {
+  max-width: 46em;
+  margin: 1rem auto;
+  padding: .6rem .9rem;
+  border: 1px solid #c94a4a;
+  border-radius: 6px;
+  color: #c94a4a;
+  font-size: .85em;
+}
+</style>
+</head>
+<body>
+
+<div class="rkf-share-bar">
+  <span class="title">{{TITLE}}</span>
+  <span class="muted">{{SUMMARY}}</span>
+  <span class="spacer"></span>
+  <a id="rkf-download" download="{{FILENAME}}" hidden>Download {{FILENAME}}</a>
+  <a href="{{EDITOR_URL}}" target="_blank" rel="noopener noreferrer">Open in the editor</a>
+</div>
+
+<main class="rkf-page" id="rkf-document"></main>
+
+<noscript>
+  <div class="rkf-problem">
+    This page renders the document with JavaScript, which is turned off. The Markdown source
+    is below; the images are embedded in the original file.
+  </div>
+</noscript>
+<pre class="rkf-fallback" id="rkf-fallback">{{FALLBACK}}</pre>
+
+<!--{{MODULES}}-->
+<script id="rkf-payload" type="application/base64">
+{{PAYLOAD}}
+</script>
+<script>
+(function () {
+  "use strict";
+
+  var slot = document.getElementById("rkf-document");
+  var payload = document.getElementById("rkf-payload");
+
+  function fail(message) {
+    var box = document.createElement("div");
+    box.className = "rkf-problem";
+    box.textContent =
+      "This document could not be displayed: " + message +
+      " The Markdown below is the document's text.";
+    slot.parentNode.insertBefore(box, slot);
+  }
+
+  function decode(text) {
+    var binary = atob(text.replace(/\s+/g, ""));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  (async function () {
+    var bytes;
+    try {
+      bytes = decode(payload.textContent);
+    } catch (error) {
+      fail("the embedded copy is damaged.");
+      return;
+    }
+
+    // Wired up before rendering, so the original is never trapped even if display fails.
+    var link = document.getElementById("rkf-download");
+    try {
+      link.href = URL.createObjectURL(
+        new Blob([bytes], { type: "application/vnd.rkformat+zip" })
+      );
+      link.hidden = false;
+    } catch (error) {
+      /* object URLs unavailable; the page still renders */
+    }
+
+    var doc;
+    try {
+      doc = await RKF.open(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      );
+    } catch (error) {
+      fail((error && error.message) || String(error));
+      return;
+    }
+
+    slot.innerHTML = RKF.markdown.render(doc.markdown, {
+      resolveImage: function (src) {
+        var asset = doc.resolve(src);
+        if (!asset) return null;
+        var url = doc.assetUrl(asset);
+        return url ? { url: url, width: asset.width, height: asset.height } : null;
+      },
+    });
+
+    var fallback = document.getElementById("rkf-fallback");
+    if (fallback) fallback.remove();
+
+    var broken = (doc.problems || []).filter(function (problem) {
+      return problem.severity === "error";
+    });
+    if (broken.length) {
+      var box = document.createElement("div");
+      box.className = "rkf-problem";
+      box.textContent =
+        broken.length +
+        (broken.length === 1 ? " problem was" : " problems were") +
+        " found in this document: " +
+        broken
+          .map(function (problem) {
+            return problem.message;
+          })
+          .join("; ");
+      slot.parentNode.insertBefore(box, slot);
+    }
+  })();
+})();
+</script>
+</body>
+</html>

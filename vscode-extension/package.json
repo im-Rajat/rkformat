@@ -2,7 +2,7 @@
   "name": "rkformat",
   "displayName": "RK Document (.rkf)",
   "description": "View and edit .rkf compound documents - Markdown with its images embedded in a single file. Live WYSIWYG editing, split preview, and paste-to-embed.",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "rkformat",
   "license": "MIT",
   "repository": {
@@ -82,6 +82,10 @@
       {
         "command": "rkformat.toggleLive",
         "title": "RK: Toggle Live (WYSIWYG) Editing"
+      },
+      {
+        "command": "rkformat.share",
+        "title": "RK: Share as Self-Viewing HTML"
       }
     ],
     "menus": {
@@ -103,6 +107,11 @@
         },
         {
           "command": "rkformat.openAsText",
+          "when": "resourceExtname =~ /\\.(rkf|rk)$/",
+          "group": "rkformat"
+        },
+        {
+          "command": "rkformat.share",
           "when": "resourceExtname =~ /\\.(rkf|rk)$/",
           "group": "rkformat"
         }

@@ -5,8 +5,18 @@
 # a Chrome or Chromium binary; set CHROME to point at one. Skips (exit 0) if none is found,
 # so this can run anywhere without becoming a false failure.
 #
-#   tests/test_site_browser.sh
+#   tests/test_site_browser.sh            # everything
+#   tests/test_site_browser.sh viewer     # just the read-only flows
+#   tests/test_site_browser.sh editor     # just the web editor harness
+#   tests/test_site_browser.sh wysiwyg    # just the round trip and the webview harness
+#
+# Each group launches its own headless Chrome, and on WSL that is ~30s of startup per launch,
+# so the full run takes several minutes. The groups exist so a single area can be re-checked
+# quickly while working on it.
 set -uo pipefail
+
+group="${1:-all}"
+runs() { [ "$group" = "all" ] || [ "$group" = "$1" ]; }
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 port="${PORT:-8731}"
@@ -42,13 +52,19 @@ if ! curl -sf --retry 30 --retry-delay 1 --retry-connrefused \
   exit 1
 fi
 
+# Chrome is bounded with `timeout`: it reliably writes the DOM but can then take minutes to
+# exit, which made the suite look hung. The assertions read the dumped output, so being killed
+# after it is written costs nothing - and if it is killed before, the check fails, which is the
+# right outcome.
+CHROME_FLAGS="--headless --disable-gpu --no-sandbox --virtual-time-budget=15000"
+
 dump() {
-  "$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=9000 \
+  timeout 120 "$chrome" $CHROME_FLAGS \
     --dump-dom "http://localhost:$port/docs/index.html$1" 2>/dev/null
 }
 
 dump_page() {
-  "$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=12000 \
+  timeout 180 "$chrome" $CHROME_FLAGS \
     --dump-dom "http://localhost:$port/$1" 2>/dev/null
 }
 
@@ -83,6 +99,7 @@ check() { # check <name> <expected-count-op> <pattern> <dom-file>
   fi
 }
 
+if runs viewer; then
 echo "--- loading the demo document ---"
 dump "?url=welcome.rkf" > "$work/demo.html"
 check "landing hidden"            '-ge 1' 'id="intro" hidden'          "$work/demo.html"
@@ -127,13 +144,18 @@ echo "--- a missing file ---"
 dump "?url=_test_absent.rkf" > "$work/absent.html"
 check "404 reported" '-ge 1' 'answered 404' "$work/absent.html"
 
+fi
+
+if runs editor; then
 echo "--- the web editor: create, type, format, embed, undo, save ---"
 python3 "$root/tests/make_site_harness.py" "$root/tests/site_harness.generated.html" >/dev/null
-"$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=30000 \
-  --dump-dom "http://localhost:$port/tests/site_harness.generated.html" 2>/dev/null > "$work/site.html"
+dump_page "tests/site_harness.generated.html" > "$work/site.html"
 summary_check "the web editor works end to end" "$work/site.html" "harness-summary"
 rm -f "$root/tests/site_harness.generated.html"
 
+fi
+
+if runs wysiwyg; then
 echo "--- source highlighting ---"
 if node "$root/tests/test_highlight.js" >/dev/null 2>&1; then
   echo "  ok    the highlighter preserves every character"
@@ -151,6 +173,8 @@ python3 "$root/tests/make_live_harness.py" "$root/tests/live_harness.generated.h
 dump_page "tests/live_harness.generated.html" > "$work/live.html"
 summary_check "live editing drives the real webview shell" "$work/live.html" "harness-summary"
 rm -f "$root/tests/live_harness.generated.html"
+
+fi
 
 echo
 if [ "$failures" -eq 0 ]; then

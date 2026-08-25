@@ -56,6 +56,25 @@ def main() -> int:
         target.write_text(banner + source.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"copied {target.relative_to(ROOT)} ({target.stat().st_size} bytes)")
 
+    # `rk share` inlines these into a self-viewing HTML, and an installed package cannot
+    # reach docs/, so they are copied in as package data.
+    package_web = ROOT / "src" / "rkformat" / "web"
+    package_web.mkdir(parents=True, exist_ok=True)
+    for name in ("rkf.js", "sanitize.js", "markdown.js", "share-template.html"):
+        source = docs / "assets" / name
+        target = package_web / name
+        # An HTML template cannot carry a /* */ banner, and its own comment already says
+        # where it comes from, so only the JS modules get one.
+        banner = (
+            "/* GENERATED COPY - do not edit.\n"
+            " *\n"
+            f" * Source of truth: docs/assets/{name}. Re-run docs/build.py after changing it.\n"
+            " * Inlined into the output of `rk share`.\n"
+            " */\n"
+        ) if name.endswith(".js") else ""
+        target.write_text(banner + source.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"copied {target.relative_to(ROOT)} ({target.stat().st_size} bytes)")
+
     demo_source = ROOT / "examples" / "welcome.rkf"
     if not demo_source.is_file():
         print("examples/welcome.rkf is missing - run examples/make_welcome.py first")

@@ -48,6 +48,11 @@
 
   const ICON = (name) => RKF.toolbar.icon(name);
 
+  // Asset URLs are resolved against this script's own location, not the page's. The two are
+  // the same on the site, but relying on the page's path breaks the moment index.html is
+  // served from anywhere else - which is exactly what the test harness does.
+  const ASSETS = new URL(".", document.currentScript.src).href;
+
   let doc = null;
   let currentName = "untitled.rkf";
   let fileHandle = null; // File System Access handle, when the browser has it
@@ -875,7 +880,7 @@
           return asset ? { url: dataUris.get(asset.path), width: asset.width, height: asset.height } : null;
         },
       });
-      const css = await fetch("assets/document.css").then((r) => r.text());
+      const css = await fetch(`${ASSETS}document.css`).then((r) => r.text());
       const html =
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n' +
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
@@ -890,6 +895,74 @@
       status(null);
     } catch (err) {
       status(`Could not build HTML: ${err.message}`, "error");
+    }
+  }
+
+  /**
+   * Build a single HTML file that anyone can open, with this document inside it.
+   *
+   * Fills the same template `rk share` uses (docs/assets/share-template.html) from the same
+   * browser modules, so the two surfaces produce the same artifact rather than two
+   * near-identical pages that drift.
+   */
+  async function shareHtml() {
+    if (!doc) return;
+    if (layout === "live") serializeLive(true);
+    status("Building a shareable file…");
+    try {
+      const [template, documentCss, ...modules] = await Promise.all(
+        [
+          "share-template.html",
+          "document.css",
+          "rkf.js",
+          "sanitize.js",
+          "markdown.js",
+        ].map((name) =>
+          fetch(ASSETS + name).then((response) => {
+            if (!response.ok) throw new Error(`could not load ${name}`);
+            return response.text();
+          })
+        )
+      );
+
+      const bytes = await RKF.serialize(doc);
+      let binary = "";
+      const chunk = 0x8000; // btoa on a huge string built char by char blows the stack
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      const encoded = btoa(binary);
+      const wrapped = encoded.replace(/(.{120})/g, "$1\n");
+      const count = doc.assets.length;
+
+      const values = {
+        TITLE: escape(doc.title),
+        FILENAME: escape(currentName),
+        SUMMARY: escape(
+          `${count} embedded image${count === 1 ? "" : "s"} · ${human(bytes.length)}`
+        ),
+        EDITOR_URL: escape(location.origin + location.pathname),
+        DOCUMENT_CSS: documentCss,
+        FALLBACK: escape(doc.markdown),
+        MODULES: modules.map((source) => `<script>\n${source}\n</script>`).join("\n"),
+        PAYLOAD: wrapped,
+      };
+      let page = template;
+      for (const [name, value] of Object.entries(values)) {
+        page = page.split(`<!--{{${name}}}-->`).join(value).split(`{{${name}}}`).join(value);
+      }
+      const leftover = page.match(/\{\{[A-Z_]+\}\}/g);
+      if (leftover) throw new Error(`template placeholders left unfilled: ${leftover.join(", ")}`);
+
+      const url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${currentName.replace(/\.(rkf|rk)$/i, "")}.html`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      status("Saved a shareable HTML file - anyone can open it, no install needed.");
+    } catch (err) {
+      status(`Could not build the shareable file: ${err.message}`, "error");
     }
   }
 
@@ -1002,6 +1075,7 @@
     "act-cleanup": "sweep",
     "act-width": "page",
     "act-export": "export",
+    "act-share": "share",
     "act-close": "close",
     "act-new-top": "newfile",
   };
@@ -1025,6 +1099,7 @@
   $("act-save").addEventListener("click", () => save(false));
   $("act-saveas").addEventListener("click", () => save(true));
   $("act-export").addEventListener("click", exportHtml);
+  $("act-share").addEventListener("click", shareHtml);
   $("act-close").addEventListener("click", closeDocument);
   $("act-width").addEventListener("click", () => setWidth(width === "page" ? "full" : "page"));
   $("act-details-close").addEventListener("click", () => {

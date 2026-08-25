@@ -75,6 +75,7 @@ rk check report.rkf                     # verify every asset's checksum
 
 # Get things out
 rk render report.rkf --open             # one self-contained .html, images inlined
+rk share report.rkf                     # one .html anyone can open, with the .rkf inside it
 rk extract report.rkf a1 -o chart.png   # pull one image back out
 rk unpack report.rkf -d report/         # explode to a plain Markdown folder
 rk pack report/ -o report.rkf           # ...and put it back together
@@ -143,9 +144,29 @@ the tick is written back into the Markdown. The transform runs *after* HTML sani
 the generated `<input>` never requires `<input>` on the allowlist; an author writing raw
 `<input>` still has it dropped.
 
+## Sending one to someone who has nothing installed
+
+```bash
+rk share notes.rkf          # -> notes.html
+```
+
+One HTML file they can double-click. It renders the document properly — images, tables,
+checkboxes — **offline**, and the original `.rkf` is inside it: a Download button hands back
+the exact bytes, verified byte-for-byte by
+[tests/test_rkformat.py](tests/test_rkformat.py). So the thing you send is both a readable
+document and a carrier for the real file. The web editor has the same action, filling the
+same [template](docs/assets/share-template.html).
+
+It costs about 1.33× the `.rkf` for image-heavy documents (base64 overhead) plus a fixed
+~70 KB of inlined reader, which dominates for small files. The archive is carried once and
+unzipped in the browser rather than rendering the images inline *and* attaching the archive,
+which would be 2.7×.
+
+With scripting off, the page still shows the Markdown as text.
+
 ## Reading one without any tooling
 
-Three routes, in increasing order of fidelity:
+Four routes, in increasing order of fidelity:
 
 1. **Any text editor.** The body is stored uncompressed and first, so `cat`, `less`, Notepad
    or a mail-client preview shows the Markdown after ~60 bytes of ZIP header. Images appear
@@ -154,6 +175,8 @@ Three routes, in increasing order of fidelity:
 2. **The web viewer** below: full rendering, nothing to install.
 3. **`rk cat doc.rkf`**, or *RK: View Markdown as Plain Text* in VS Code, which opens the
    body as a read-only `.md` editor with highlighting and search.
+4. **`rk share doc.rkf`** — see above. The most useful thing to send someone who has nothing
+   installed and may be offline.
 
 ## Write and read one in the browser
 
@@ -320,6 +343,7 @@ the webview's actual HTML out of `extension.js`, so the test cannot drift from w
 | [docs/assets/rkfwrite.js](docs/assets/rkfwrite.js) | Writes `.rkf` in the browser |
 | [docs/assets/toolbar.js](docs/assets/toolbar.js) | Toolbar shared with the extension |
 | [docs/assets/highlight.js](docs/assets/highlight.js) | Markdown source highlighting, shared |
+| [src/rkformat/share.py](src/rkformat/share.py) | Builds the self-viewing HTML for `rk share` |
 | [examples/](examples/) | A demo document and the script that builds it |
 
 ## Possible next steps

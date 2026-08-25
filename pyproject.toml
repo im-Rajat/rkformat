@@ -27,5 +27,10 @@ rk = "rkformat.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# The browser modules `rk share` inlines into a self-viewing HTML. Generated from
+# docs/assets by docs/build.py.
+[tool.setuptools.package-data]
+rkformat = ["web/*.js", "web/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

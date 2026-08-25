@@ -46,6 +46,7 @@
     saveas: '<path d="M5 3.5h8l5 5v5"/><path d="M4 5.5v15A1.5 1.5 0 0 0 5.5 22h6"/><path d="M8 3.5v6h6"/><path d="m15 20 3-3 3 3m-3-3v6"/>',
     export: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9h17"/><path d="m10 13.5 2.5 2.5 4-4.5"/>',
     close: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
+    share: '<path d="M4 12v7a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-7"/><path d="M12 15.5V3.5"/><path d="m8 7.5 4-4 4 4"/>',
     newfile: '<path d="M13 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19V9.5z"/><path d="M13 3.5v6h6"/><path d="M12 12.5v5M9.5 15h5"/>',
   };
 

@@ -78,6 +78,14 @@ window.showSaveFilePicker = async () => ({
   }),
 });
 
+// Capture blobs handed to downloads, so a generated file can be inspected.
+const createdBlobs = [];
+const realCreateObjectURL = URL.createObjectURL.bind(URL);
+URL.createObjectURL = (blob) => {
+  createdBlobs.push(blob);
+  return realCreateObjectURL(blob);
+};
+
 // Keep prompts deterministic.
 window.prompt = (message, value) => (/title/i.test(message) ? "Harness Doc" : value || "x");
 window.confirm = () => true;
@@ -388,7 +396,49 @@ function report() {
     click('[data-layout="live"]');
     await waitFor("back to live", () => workspace.dataset.layout === "live");
 
-    // 12. The images panel.
+    // 12. The shareable file: one HTML anyone can open, with the .rkf inside it.
+    //
+    // Built from the same template `rk share` fills, so the two surfaces cannot drift into
+    // producing different artifacts. The check that matters is that the document can be read
+    // back out of the page - that is the whole promise of the file.
+    const blobsBefore = createdBlobs.length;
+    click("#act-share");
+    const built = await waitFor("share", () => createdBlobs.length > blobsBefore, 400);
+    check("a shareable file was produced", built, createdBlobs.length - blobsBefore);
+
+    if (built) {
+      const page = await createdBlobs[createdBlobs.length - 1].text();
+      check("it is an HTML document", page.startsWith("<!doctype html>"), page.slice(0, 40));
+      check("no placeholders were left unfilled", !/\\{\\{[A-Z_]+\\}\\}/.test(page),
+        (page.match(/\\{\\{[A-Z_]+\\}\\}/g) || []).join(","));
+      check("nothing external is referenced", !/<script src=|<link /.test(page),
+        (page.match(/<script src=[^>]*>|<link [^>]*>/g) || []).join(" "));
+      check("the reader is inlined", page.includes("function looksLikeRkf"));
+      check("the renderer is inlined", page.includes("tok-") === false || page.includes("figurize"),
+        "markdown.js marker missing");
+      check("there is a text fallback for no-JavaScript", page.includes("<noscript>"));
+
+      const match = /<script id="rkf-payload" type="application\\/base64">([\\s\\S]*?)<\\/script>/.exec(page);
+      check("it carries a payload", match !== null);
+      if (match) {
+        const binary = atob(match[1].replace(/\\s+/g, ""));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        check("the payload is a .rkf", RKF.looksLikeRkf(bytes), "signature missing");
+        const reopened = await RKF.open(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+        );
+        check(
+          "the document reads back out of the page",
+          reopened.markdown === source.value,
+          JSON.stringify(reopened.markdown.slice(0, 60))
+        );
+        check("its images came with it", reopened.assets.length === 1, reopened.assets.length);
+        check("their checksums verify", reopened.assets[0].verified === true);
+      }
+    }
+
+    // 13. The images panel.
     click("#act-images");
     await wait(150);
     check("the details panel opens", $("details").hidden === false);

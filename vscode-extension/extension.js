@@ -541,6 +541,20 @@ async function commandRender(uri) {
   if (choice === "Reveal") await vscode.commands.executeCommand("revealFileInOS", target);
 }
 
+async function commandShare(uri) {
+  const source = await pickRkf(uri);
+  if (!source) return;
+  const target = source.with({ path: source.path.replace(/\.(rkf|rk)$/i, ".html") });
+  const output = await rk(["share", source.fsPath, "-o", target.fsPath, "--force"]);
+  const choice = await vscode.window.showInformationMessage(
+    output.trim().split("\n")[0],
+    "Open in browser",
+    "Reveal"
+  );
+  if (choice === "Open in browser") await vscode.env.openExternal(target);
+  if (choice === "Reveal") await vscode.commands.executeCommand("revealFileInOS", target);
+}
+
 async function commandUnpack(uri) {
   const source = await pickRkf(uri);
   if (!source) return;
@@ -660,6 +674,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("rkformat.new", () => guard(commandNew())),
     vscode.commands.registerCommand("rkformat.render", (uri) => guard(commandRender(uri))),
+    vscode.commands.registerCommand("rkformat.share", (uri) => guard(commandShare(uri))),
     vscode.commands.registerCommand("rkformat.unpack", (uri) => guard(commandUnpack(uri))),
     vscode.commands.registerCommand("rkformat.pack", (uri) => guard(commandPack(uri))),
     vscode.commands.registerCommand("rkformat.check", (uri) => guard(commandCheck(uri))),

@@ -113,6 +113,8 @@ class RkDocument:
         # Compressed size of each member as it was read, keyed by archive path. Empty for
         # documents built in memory, since nothing has been serialised yet.
         self.stored_sizes: dict[str, int] = {}
+        # Members whose bytes could not be decompressed, reported by validate().
+        self.corrupt_members: list[str] = []
 
     # ------------------------------------------------------------------ create
 
@@ -161,7 +163,9 @@ class RkDocument:
 
             declared = None
             if MIMETYPE_MEMBER in names:
-                declared = zf.read(MIMETYPE_MEMBER).decode("utf-8", "replace").strip()
+                declared = (
+                    _read_member(zf, MIMETYPE_MEMBER, origin).decode("utf-8", "replace").strip()
+                )
             if declared != MIMETYPE:
                 message = (
                     f"{origin}: missing or wrong mimetype member "
@@ -173,7 +177,9 @@ class RkDocument:
             if MANIFEST_MEMBER not in names:
                 raise RkfFormatError(f"{origin}: no {MANIFEST_MEMBER}")
             try:
-                manifest = Manifest.from_json(json.loads(zf.read(MANIFEST_MEMBER)))
+                manifest = Manifest.from_json(
+                    json.loads(_read_member(zf, MANIFEST_MEMBER, origin))
+                )
             except json.JSONDecodeError as exc:
                 raise RkfFormatError(f"{origin}: {MANIFEST_MEMBER} is not valid JSON: {exc}") from exc
 
@@ -182,16 +188,23 @@ class RkDocument:
                     f"{origin}: manifest points at content {manifest.content!r}, "
                     "which is not in the archive"
                 )
-            markdown = zf.read(manifest.content).decode("utf-8")
+            markdown = _read_member(zf, manifest.content, origin).decode("utf-8")
 
             known = {MIMETYPE_MEMBER, MANIFEST_MEMBER, manifest.content}
             blobs: dict[str, bytes] = {}
             extras: dict[str, bytes] = {}
+            corrupt: list[str] = []
             for name in names:
                 if name in known or name.endswith("/"):
                     continue
                 safe_member_name(name)
-                payload = zf.read(name)
+                try:
+                    payload = zf.read(name)
+                except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
+                    # One damaged asset should not stop the document from opening: the whole
+                    # point of `rk check` is to say what is wrong with a file.
+                    corrupt.append(f"{name} cannot be read: {exc}")
+                    continue
                 if posixpath.dirname(name) == ASSET_DIR:
                     blobs[name] = payload
                 else:
@@ -199,6 +212,7 @@ class RkDocument:
 
         doc = cls(manifest, markdown, blobs, extras)
         doc.stored_sizes = stored
+        doc.corrupt_members = corrupt
         if strict:
             problems = [p for p in doc.validate() if p.severity == "error"]
             if problems:
@@ -400,7 +414,9 @@ class RkDocument:
 
     def validate(self) -> list[Problem]:
         """Check every integrity rule in SPEC.md section 3."""
-        problems: list[Problem] = []
+        problems: list[Problem] = [
+            Problem("error", message) for message in self.corrupt_members
+        ]
         seen_ids: set[str] = set()
         seen_paths: set[str] = set()
 
@@ -639,6 +655,14 @@ def _write(
     info.compress_type = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
     info.external_attr = 0o644 << 16
     zf.writestr(info, payload)
+
+
+def _read_member(zf: zipfile.ZipFile, name: str, origin: str) -> bytes:
+    """Read a member the document cannot do without, reporting damage clearly."""
+    try:
+        return zf.read(name)
+    except (zipfile.BadZipFile, zlib.error, EOFError, OSError) as exc:
+        raise RkfFormatError(f"{origin}: {name} is damaged and cannot be read: {exc}") from exc
 
 
 def _enforce_limits(zf: zipfile.ZipFile, origin: str) -> None:

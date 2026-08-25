@@ -359,6 +359,35 @@ def cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_share(args: argparse.Namespace) -> int:
+    """Write one HTML file that displays the document and carries the original inside it."""
+    from .share import build_share_page
+
+    source = Path(args.file)
+    payload = source.read_bytes()
+    doc = RkDocument.from_bytes(payload, strict=False, origin=str(source))
+    target = _resolve_out(args.output, source, ".html")
+    _confirm_overwrite(target, args.force)
+
+    page = build_share_page(
+        doc,
+        payload,
+        filename=source.name,
+        editor_url=args.editor_url,
+    )
+    target.write_text(page, encoding="utf-8")
+
+    overhead = target.stat().st_size / len(payload) if payload else 0
+    _out(
+        f"wrote {target} ({_human(target.stat().st_size)}, "
+        f"{overhead:.1f}x the .rkf) - double-click it to read the document"
+    )
+    _out(f"the original {source.name} is inside it; the page offers it as a download")
+    if args.open:
+        webbrowser.open(target.resolve().as_uri())
+    return 0
+
+
 def cmd_view(args: argparse.Namespace) -> int:
     doc = _load(args.file)
     tmp = Path(tempfile.mkdtemp(prefix="rk-view-")) / (Path(args.file).stem + ".html")
@@ -560,6 +589,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--open", action="store_true", help="open the result in a browser")
     _add_html_flags(p)
     p.add_argument("--no-meta", action="store_true")
+
+    p = add(
+        "share",
+        cmd_share,
+        "Write one self-viewing HTML file: it displays the document and contains the "
+        "original .rkf, so a recipient needs nothing installed.",
+    )
+    p.add_argument("file")
+    p.add_argument("-o", "--output")
+    p.add_argument("--open", action="store_true", help="open the result in a browser")
+    p.add_argument(
+        "--editor-url",
+        default="https://im-rajat.github.io/rkformat/",
+        help="where the page's \"Open in the editor\" link points",
+    )
+    p.add_argument("-f", "--force", action="store_true")
 
     p = add("view", cmd_view, "Render to a temp file and open it in a browser.")
     p.add_argument("file")

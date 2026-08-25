@@ -10,11 +10,11 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
 
-vsix="$here/rkformat-0.4.1.vsix"
+vsix="$here/rkformat-0.5.0.vsix"
 
 if ! command -v npx >/dev/null 2>&1; then
   echo "npx not found — install Node.js, or package the extension elsewhere and run:" >&2
-  echo "  code --install-extension rkformat-0.4.1.vsix" >&2
+  echo "  code --install-extension rkformat-0.5.0.vsix" >&2
   exit 1
 fi
 
