@@ -14,6 +14,7 @@ would show.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -370,9 +371,28 @@ function report() {
 """
 
 
-STYLE_BLOCK = """<link rel="stylesheet" href="../docs/assets/document.css">
-<link rel="stylesheet" href="../vscode-extension/media/editor.css">
-<style>
+def extract_assets(extension: str) -> tuple[str, str]:
+    """The stylesheets and scripts the webview loads, in order, repointed at the repo.
+
+    Taken from the `media("...")` references in extension.js rather than restated here, so a
+    new dependency cannot leave the harness testing a half-loaded editor.
+    """
+    names = re.findall(r'media\("([^"]+)"\)', extension)
+    seen, styles, scripts = set(), [], []
+    for name in names:
+        if name in seen:
+            continue
+        seen.add(name)
+        # The generated copies live in the extension's media/ directory; document.css does not.
+        base = "../docs/assets" if name == "document.css" else "../vscode-extension/media"
+        if name.endswith(".css"):
+            styles.append(f'<link rel="stylesheet" href="{base}/{name}">')
+        elif name.endswith(".js"):
+            scripts.append(f'<script src="{base}/{name}"></script>')
+    return "\n".join(styles), "\n".join(scripts)
+
+
+STYLE_BLOCK = """<style>
   /* Stand-ins for the theme variables VS Code injects, so the harness is a fair visual
      proxy for the real webview and can be screenshotted. */
   :root {
@@ -452,7 +472,8 @@ const DEMO = [
 window.addEventListener("load", () => {
   window.postMessage(
     { type: "init", markdown: DEMO, html: RKF.markdown.render(DEMO, { resolveImage }),
-      title: "Quarterly Review", assets: ASSETS, problems: [], layout: "live",
+      title: "Quarterly Review", assets: ASSETS, problems: [],
+      layout: new URLSearchParams(location.search).get("layout") || "live",
       width: new URLSearchParams(location.search).get("width") || "full", debounceMs: 250 },
     "*"
   );
@@ -468,19 +489,24 @@ def main() -> int:
     target = Path(sys.argv[1])
     visual = "--visual" in sys.argv[2:]
     shell = extract_shell()
+    extension_source = (ROOT / "vscode-extension" / "extension.js").read_text(encoding="utf-8")
+    stylesheets, webview_scripts = extract_assets(extension_source)
     page = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Live editing harness</title>
+<!-- The extension inlines this from `rk css` rather than loading it as a webview asset,
+     so it is named here explicitly; everything else is derived from extension.js. -->
+<link rel="stylesheet" href="../docs/assets/document.css">
+{stylesheets}
 {STYLE_BLOCK}
 </head>
 {shell}
 <script src="../docs/assets/sanitize.js"></script>
 <script src="../docs/assets/markdown.js"></script>
-<script src="../docs/assets/tomarkdown.js"></script>
 {STUB_SCRIPT}
-<script src="../vscode-extension/media/editor.js"></script>
+{webview_scripts}
 {VISUAL_SCRIPT if visual else DRIVER_SCRIPT}
 </body>
 </html>

@@ -19,6 +19,8 @@ Opens `.rkf` and `.rk` files as a real editor instead of a binary blob, in four 
 - **A formatting toolbar** in Live mode: undo/redo, bold, italic, strikethrough, inline code,
   H1–H3, body text, bulleted/numbered/task lists, indent and outdent, quote, code block,
   table, horizontal rule, link, image, and clear formatting. Ctrl+B / Ctrl+I / Ctrl+K work.
+- **The Markdown source is syntax highlighted** in Source and Split, coloured from VS Code's
+  own editor variables so it matches the surrounding theme.
 - **Task lists** render as real checkboxes you can tick; the tick is written back into the
   Markdown.
 - **Paste or drag an image** in and it is embedded in the document — no sidecar folder, no

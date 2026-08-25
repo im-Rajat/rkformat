@@ -20,13 +20,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _index_html() -> str:
+    return (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+
+
 def extract_body() -> str:
     """The contents of index.html's <body>, minus its script tags."""
-    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    match = re.search(r"<body>(.*?)</body>", html, re.S)
+    match = re.search(r"<body>(.*?)</body>", _index_html(), re.S)
     if not match:
         raise SystemExit("could not find <body> in docs/index.html")
     return re.sub(r'\s*<script src="[^"]*"></script>', "", match.group(1))
+
+
+def extract_stylesheets() -> str:
+    """The page's stylesheets, repointed at docs/.
+
+    Read from index.html rather than restated, so adding one to the page cannot leave the
+    harness testing a differently-styled document.
+    """
+    links = re.findall(r'<link rel="stylesheet" href="(assets/[^"]+)">', _index_html())
+    return "\n".join(f'<link rel="stylesheet" href="../docs/{href}">' for href in links)
+
+
+def extract_scripts(before_app: bool) -> str:
+    """The page's scripts, repointed at docs/, split around app.js.
+
+    Also read from index.html: the harness once hard-coded this list, and adding a dependency
+    to the page silently broke every check because the stub ran against a half-loaded editor.
+    """
+    sources = re.findall(r'<script src="(assets/[^"]+)"></script>', _index_html())
+    chosen = [s for s in sources if (s != "assets/app.js") == before_app]
+    return "\n".join(f'<script src="../docs/{src}"></script>' for src in chosen)
 
 
 # Loaded before app.js so the editor sees the stubs, exactly as a browser would see the
@@ -282,7 +306,89 @@ function report() {
       live.innerHTML.slice(0, 200)
     );
 
-    // 11. The images panel.
+    // 11. Syntax highlighting, and the alignment it depends on.
+    //
+    // The layer and the textarea must wrap identically. If they do not, their content heights
+    // diverge and every line below the first difference is offset - so heights are the thing
+    // to assert, not colours. The document deliberately mixes long unbroken URLs, bold and
+    // italic runs, tabs and CJK, since those are what break wrapping.
+    click('[data-layout="source"]');
+    await waitFor("source mode", () => workspace.dataset.layout === "source");
+    const layer = $("source-layer");
+    check("the highlight layer exists", layer !== null);
+
+    const ALIGN = [
+      "# Heading with **bold** and *italic*",
+      "",
+      "- Go DT-SFI/dr-devops -> master: https://dta.example.com/job/DT-SFI/job/dr-devops/job/master/build?delay=0sec",
+      "- **DEPLOYMENT_TYPE**: nr_dashboards and a very long trailing phrase that has to wrap somewhere sensible",
+      "- [x] a task with `code` and ~~struck~~ text plus a [link](https://example.com/some/deep/path)",
+      "",
+      "> quoted text that is long enough to wrap across more than one visual line in a narrow pane",
+      "",
+      "```python",
+      "print('hello')  # not a heading",
+      "```",
+      "",
+      "\\ttab indented line with 你好 and cafe\\u0301 and an emoji rocket",
+      "",
+      "| a | b |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "",
+    ].join("\\n");
+
+    source.value = ALIGN;
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    // Wait for something only the *new* text contains. Waiting for "tok-heading" was
+    // satisfied instantly by the previous document's heading, so every check below ran
+    // against a stale layer - including the height comparison, which then meant nothing.
+    await waitFor("highlight", () => layer.textContent.includes("DEPLOYMENT_TYPE"));
+
+    check("headings are coloured", layer.innerHTML.includes("tok-heading"));
+    check("code spans are coloured", layer.innerHTML.includes("tok-code"));
+    check("links are coloured", layer.innerHTML.includes("tok-url"));
+    check("markers are dimmed", layer.innerHTML.includes("tok-marker"));
+    check("fenced code is coloured", layer.innerHTML.includes("tok-lang"));
+    check("task boxes are coloured", layer.innerHTML.includes("tok-task"));
+    check(
+      "the layer shows exactly the document text",
+      layer.textContent === `${ALIGN}\\n`,
+      JSON.stringify(layer.textContent.slice(0, 60))
+    );
+
+    // Compare wrapped heights. The textarea's own height is set from the layer, so measure
+    // its scrollHeight, which reflects how the browser laid the same text out.
+    const layerHeight = layer.scrollHeight;
+    const textHeight = source.scrollHeight;
+    check(
+      "the layer and the textarea wrap to the same height",
+      Math.abs(layerHeight - textHeight) <= 2,
+      `layer ${layerHeight} vs textarea ${textHeight}`
+    );
+    check(
+      "the wrapped text is taller than one line (so wrapping was exercised)",
+      layerHeight > 300,
+      layerHeight
+    );
+
+    // Narrow the pane to force different wrap points, then compare again.
+    const workspaceElement = workspace;
+    const originalWidth = workspaceElement.style.width;
+    workspaceElement.style.width = "420px";
+    source.dispatchEvent(new Event("input", { bubbles: true }));
+    await wait(80);
+    check(
+      "they still agree when the pane is narrow",
+      Math.abs(layer.scrollHeight - source.scrollHeight) <= 2,
+      `layer ${layer.scrollHeight} vs textarea ${source.scrollHeight}`
+    );
+    workspaceElement.style.width = originalWidth;
+
+    click('[data-layout="live"]');
+    await waitFor("back to live", () => workspace.dataset.layout === "live");
+
+    // 12. The images panel.
     click("#act-images");
     await wait(150);
     check("the details panel opens", $("details").hidden === false);
@@ -305,13 +411,15 @@ def main() -> int:
         return 2
     target = Path(sys.argv[1])
     body = extract_body()
+    stylesheets = extract_stylesheets()
+    libraries = extract_scripts(before_app=True)
+    application = extract_scripts(before_app=False)
     page = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Web editor harness</title>
-<link rel="stylesheet" href="../docs/assets/document.css">
-<link rel="stylesheet" href="../docs/assets/viewer.css">
+{stylesheets}
 <style>
   #harness-results, #harness-summary {{
     white-space: pre;
@@ -324,13 +432,8 @@ def main() -> int:
 <body>
 {body}
 {STUB_SCRIPT}
-<script src="../docs/assets/rkf.js"></script>
-<script src="../docs/assets/rkfwrite.js"></script>
-<script src="../docs/assets/sanitize.js"></script>
-<script src="../docs/assets/markdown.js"></script>
-<script src="../docs/assets/tomarkdown.js"></script>
-<script src="../docs/assets/toolbar.js"></script>
-<script src="../docs/assets/app.js"></script>
+{libraries}
+{application}
 {DRIVER_SCRIPT}
 </body>
 </html>

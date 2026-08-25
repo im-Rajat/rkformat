@@ -134,6 +134,14 @@ python3 "$root/tests/make_site_harness.py" "$root/tests/site_harness.generated.h
 summary_check "the web editor works end to end" "$work/site.html" "harness-summary"
 rm -f "$root/tests/site_harness.generated.html"
 
+echo "--- source highlighting ---"
+if node "$root/tests/test_highlight.js" >/dev/null 2>&1; then
+  echo "  ok    the highlighter preserves every character"
+else
+  echo "  FAIL  the highlighter preserves every character"
+  failures=$((failures + 1))
+fi
+
 echo "--- WYSIWYG round trip (rendering must be stable) ---"
 dump_page "tests/wysiwyg_roundtrip.html" > "$work/roundtrip.html"
 summary_check "markdown -> html -> markdown is stable" "$work/roundtrip.html" "summary"

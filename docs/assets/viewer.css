@@ -431,21 +431,16 @@ body[data-width="page"] #preview {
 
 #preview-pane .rkf-meta { padding-top: 1rem; }
 
-#source {
-  flex: 1 1 auto;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  border: 0;
-  resize: none;
-  outline: none;
-  padding: 1.25rem clamp(1rem, 4%, 3rem);
+/* The source editor's metrics live in highlight.css, shared with the extension so the
+   highlighted layer and the textarea cannot drift apart. Only the palette is set here. */
+#source-pane {
+  --rkf-src-font: ui-monospace, "SF Mono", Consolas, monospace;
+  --rkf-src-size: 0.84rem;
+  --rkf-src-line: 1.65;
+  --rkf-src-pad: 1.25rem clamp(1rem, 4%, 3rem);
+  --rkf-src-caret: var(--ui-ink);
+  --rkf-src-selection: rgba(110, 165, 255, 0.3);
   background: var(--ui-bg);
-  color: var(--ui-ink);
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 0.84rem;
-  line-height: 1.65;
-  tab-size: 2;
 }
 
 /* ------------------------------------------------------------------- details */

@@ -236,19 +236,17 @@ body[data-width="page"] #preview {
 /* Task checkboxes are click targets while editing, not part of the text flow. */
 #live input[type="checkbox"] { cursor: pointer; }
 
-#source {
-  flex: 1 1 auto;
-  width: 100%;
-  border: 0;
-  resize: none;
-  outline: none;
-  padding: 1.25rem clamp(1rem, 4%, 3rem);
+/* The source editor's metrics live in highlight.css, shared with the web editor so the
+   highlighted layer and the textarea cannot drift apart. Only the palette is set here, from
+   VS Code's own editor variables so it matches the surrounding theme. */
+#source-pane {
+  --rkf-src-font: var(--vscode-editor-font-family, ui-monospace, monospace);
+  --rkf-src-size: var(--vscode-editor-font-size, 13px);
+  --rkf-src-line: 1.6;
+  --rkf-src-pad: 1.25rem clamp(1rem, 4%, 3rem);
+  --rkf-src-caret: var(--vscode-editorCursor-foreground, var(--vscode-editor-foreground));
+  --rkf-src-selection: var(--vscode-editor-selectionBackground, rgba(110, 165, 255, 0.35));
   background: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-  font-family: var(--vscode-editor-font-family, ui-monospace, monospace);
-  font-size: var(--vscode-editor-font-size, 13px);
-  line-height: 1.6;
-  tab-size: 2;
 }
 
 /* ------------------------------------------------------------- images sidebar */

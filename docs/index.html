@@ -7,6 +7,7 @@
 <meta name="description" content="Create, edit and read .rkf documents in the browser - Markdown with its images embedded in one file. Nothing is uploaded anywhere.">
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="assets/document.css">
+<link rel="stylesheet" href="assets/highlight.css">
 <link rel="stylesheet" href="assets/viewer.css">
 </head>
 <body>
@@ -130,8 +131,11 @@
          role="textbox" aria-multiline="true" aria-label="Document"></div>
   </section>
   <section id="source-pane">
-    <textarea id="source" spellcheck="true" aria-label="Markdown source"
-      placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
+    <div class="rkf-source-wrap" id="source-wrap">
+      <div class="rkf-source-layer" id="source-layer" aria-hidden="true"></div>
+      <textarea id="source" spellcheck="true" aria-label="Markdown source"
+        placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
+    </div>
   </section>
   <div id="divider" role="separator" aria-orientation="vertical"></div>
   <section id="preview-pane">
@@ -163,6 +167,7 @@
 <script src="assets/sanitize.js"></script>
 <script src="assets/markdown.js"></script>
 <script src="assets/tomarkdown.js"></script>
+<script src="assets/highlight.js"></script>
 <script src="assets/toolbar.js"></script>
 <script src="assets/app.js"></script>
 </body>

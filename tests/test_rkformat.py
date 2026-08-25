@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -365,17 +366,39 @@ def test_in_memory_document_falls_back_to_uncompressed_sizes():
 # ---------------------------------------------------------------- generated files
 
 
+# Every file docs/build.py copies into the extension. Listed here rather than inferred, so
+# adding a shared file without adding it to the build is caught.
+GENERATED_COPIES = ("tomarkdown.js", "toolbar.js", "highlight.js", "highlight.css")
+
+
 def test_generated_extension_copies_are_current():
     """docs/build.py copies shared assets into the extension; they must not drift."""
     root = Path(__file__).resolve().parents[1]
-    pairs = [
-        (root / "docs" / "assets" / "tomarkdown.js", root / "vscode-extension" / "media" / "tomarkdown.js"),
-    ]
-    for source, copy in pairs:
-        if not copy.is_file():
-            continue  # the extension folder is optional in a source checkout
+    media = root / "vscode-extension" / "media"
+    if not media.is_dir():
+        return  # the extension folder is optional in a source checkout
+    for name in GENERATED_COPIES:
+        source = root / "docs" / "assets" / name
+        copy = media / name
+        assert source.is_file(), f"docs/assets/{name} is missing"
+        assert copy.is_file(), f"{name} was never copied - run python3 docs/build.py"
         assert source.read_text() in copy.read_text(), (
-            f"{copy.name} is stale - run python3 docs/build.py"
+            f"{name} is stale - run python3 docs/build.py"
+        )
+
+
+def test_every_shared_asset_is_copied():
+    """A shared file the extension loads must be in the build script's list."""
+    root = Path(__file__).resolve().parents[1]
+    extension = root / "vscode-extension" / "extension.js"
+    if not extension.is_file():
+        return
+    referenced = set(re.findall(r'media\("([^"]+)"\)', extension.read_text()))
+    # These belong to the extension itself rather than being copied from docs/assets.
+    own = {"editor.js", "editor.css"}
+    for name in sorted(referenced - own):
+        assert name in GENERATED_COPIES, (
+            f"the webview loads {name}, but docs/build.py does not copy it"
         )
 
 

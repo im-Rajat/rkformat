@@ -166,8 +166,11 @@ function editorBodyHtml() {
            role="textbox" aria-multiline="true" aria-label="Document"></div>
     </section>
     <section id="source-pane">
-      <textarea id="source" spellcheck="true" aria-label="Markdown source"
-        placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
+      <div class="rkf-source-wrap" id="source-wrap">
+        <div class="rkf-source-layer" id="source-layer" aria-hidden="true"></div>
+        <textarea id="source" spellcheck="true" aria-label="Markdown source"
+          placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
+      </div>
     </section>
     <div id="divider" role="separator" aria-orientation="vertical"></div>
     <section id="preview-pane"><div id="preview" class="rkf-page"></div></section>
@@ -261,10 +264,12 @@ class RkfEditorProvider {
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data: https:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="${media("highlight.css")}">
 <link rel="stylesheet" href="${media("editor.css")}">
 <style>${documentCss}</style>
 </head>
 ${editorBodyHtml()}
+  <script nonce="${nonce}" src="${media("highlight.js")}"></script>
   <script nonce="${nonce}" src="${media("tomarkdown.js")}"></script>
   <script nonce="${nonce}" src="${media("editor.js")}"></script>
 </body>

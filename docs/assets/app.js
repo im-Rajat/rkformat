@@ -28,6 +28,7 @@
     workspace: $("workspace"),
     live: $("live"),
     source: $("source"),
+    sourceLayer: $("source-layer"),
     preview: $("preview"),
     docMeta: $("doc-meta"),
     docName: $("doc-name"),
@@ -163,6 +164,45 @@
     els.docMeta.innerHTML = bits.join("");
   }
 
+  // ------------------------------------------------------------- highlighting
+
+  // Above this size the highlighter is skipped and the source shown plain. Re-tokenising a
+  // very large document on every keystroke is the one thing that would make typing lag, and
+  // plain text is a better failure than a stutter.
+  const HIGHLIGHT_LIMIT = 400 * 1024;
+  let highlightFrame = null;
+
+  /**
+   * Repaint the highlighted layer under the textarea.
+   *
+   * The textarea is stretched to the layer's height because neither element scrolls on its
+   * own - the wrapper does. See the note at the top of highlight.css for why that matters.
+   */
+  function refreshHighlight() {
+    const text = els.source.value;
+    if (text.length > HIGHLIGHT_LIMIT) {
+      els.sourceLayer.textContent = `${text}\n`;
+    } else {
+      els.sourceLayer.innerHTML = RKF.highlight.markdown(text);
+    }
+    els.source.style.height = `${els.sourceLayer.offsetHeight}px`;
+  }
+
+  /**
+   * Coalesce repaints across a burst of keystrokes.
+   *
+   * A timer rather than requestAnimationFrame: rAF only fires when the browser produces a
+   * frame, which a headless browser under a virtual clock does not, so the layer would never
+   * repaint under test. The guard means fast typing still costs one repaint per tick.
+   */
+  function scheduleHighlight() {
+    if (highlightFrame) return;
+    highlightFrame = setTimeout(() => {
+      highlightFrame = null;
+      refreshHighlight();
+    }, 16);
+  }
+
   // ------------------------------------------------------------------- layout
 
   function setLayout(name) {
@@ -175,7 +215,11 @@
     }
     if (name === "live" && previous !== "live") loadLive();
     if (previous === "live" && name !== "live") serializeLive(true);
-    if (name !== "live") renderPreview();
+    if (name !== "live") {
+      renderPreview();
+      // The pane may have changed width, which changes where lines wrap.
+      refreshHighlight();
+    }
     remember();
   }
 
@@ -252,6 +296,7 @@
         );
       }
       els.source.value = markdown;
+      scheduleHighlight();
       commit(markdown);
     };
     if (immediate) run();
@@ -312,6 +357,7 @@
       common += 1;
     }
     els.source.value = markdown;
+    refreshHighlight();
     if (document.activeElement === els.source) {
       const caret = Math.min(common, markdown.length);
       try {
@@ -521,6 +567,7 @@
     const caret = start + payload.length;
     els.source.setSelectionRange(caret, caret);
     els.source.focus();
+    refreshHighlight();
     commit(els.source.value);
     schedulePreview();
   }
@@ -610,6 +657,7 @@
       remove.addEventListener("click", () => {
         doc.removeAsset(asset.id, { pruneRefs: true });
         els.source.value = doc.markdown;
+        refreshHighlight();
         markDirty(true);
         doc.revalidate();
         if (layout === "live") loadLive();
@@ -654,6 +702,7 @@
     document.title = `${doc.title} — .rkf`;
 
     els.source.value = doc.markdown;
+    refreshHighlight();
     doc.revalidate();
     markDirty(false);
     const remembered = recall();
@@ -1024,6 +1073,7 @@
   });
 
   els.source.addEventListener("input", () => {
+    scheduleHighlight();
     commit(els.source.value);
     schedulePreview();
   });
@@ -1137,6 +1187,10 @@
         applyFormat("link");
       }
     }
+  });
+
+  window.addEventListener("resize", () => {
+    if (doc) scheduleHighlight();
   });
 
   window.addEventListener("beforeunload", (event) => {

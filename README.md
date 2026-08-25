@@ -194,8 +194,10 @@ The site cannot call Python, so some things necessarily exist twice. Three mecha
 them from drifting:
 
 - **Shared source where it is possible.** The renderer, the sanitiser, the HTML→Markdown
-  serialiser and the toolbar definition live once in `docs/assets/` and the extension gets
-  generated copies from [docs/build.py](docs/build.py), which a test asserts are current.
+  serialiser, the toolbar definition and the source highlighter live once in `docs/assets/`
+  and the extension gets generated copies from [docs/build.py](docs/build.py). One test
+  asserts the copies are current; another asserts that anything the webview loads is actually
+  in the build script's list, so a new shared file cannot be forgotten.
   The stylesheet is generated from `rkformat.render.PAGE_CSS` the same way.
 - **Rendering is diffed.** [tests/test_site_parity.js](tests/test_site_parity.js) renders 110
   fixtures — nested emphasis, tight and loose lists, tables, entities, raw HTML and
@@ -217,6 +219,12 @@ quietly diverge, and checking JavaScript against itself would prove nothing.
 | **Split** | Markdown source beside a live preview. |
 | **Source** | Markdown only. |
 | **Preview** | Rendered page only. |
+
+The Markdown source is **syntax highlighted** — headings, emphasis, code, links, task boxes
+and table rules all coloured, with the markup characters dimmed so the structure reads at a
+glance. A textarea cannot colour its own text, so a highlighted layer sits behind a
+transparent one; the metrics that decide where lines wrap live in a single shared stylesheet,
+because a one-character difference between the layers would offset everything below it.
 
 The writing surface uses the **full width** of the editor by default, because a narrow
 measure suits reading and gets cramped for writing. `rkformat.editorWidth: "page"` — or the
@@ -282,6 +290,7 @@ python3 tests/test_rkformat.py
 node tests/test_site_parity.js   # browser renderer vs. `rk render`, 102 fixtures
 node tests/test_extension_undo.js  # the extension's undo/redo stack, against a vscode stub
 node tests/test_web_write.js     # the browser writer, validated by the Python CLI
+node tests/test_highlight.js     # the source highlighter, 94 checks
 tests/test_site_browser.sh       # headless Chrome: the web editor end to end, the WYSIWYG
                                  # round trip, and live editing in the real webview shell
 ```
@@ -310,6 +319,7 @@ the webview's actual HTML out of `extension.js`, so the test cannot drift from w
 | [docs/](docs/) | The web editor, served by GitHub Pages |
 | [docs/assets/rkfwrite.js](docs/assets/rkfwrite.js) | Writes `.rkf` in the browser |
 | [docs/assets/toolbar.js](docs/assets/toolbar.js) | Toolbar shared with the extension |
+| [docs/assets/highlight.js](docs/assets/highlight.js) | Markdown source highlighting, shared |
 | [examples/](examples/) | A demo document and the script that builds it |
 
 ## Possible next steps

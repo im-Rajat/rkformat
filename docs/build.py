@@ -41,7 +41,7 @@ def main() -> int:
     # One canonical copy lives here; the extension gets a generated duplicate, because a
     # packaged extension cannot read files from outside its own directory.
     media = ROOT / "vscode-extension" / "media"
-    for name in ("tomarkdown.js", "toolbar.js"):
+    for name in ("tomarkdown.js", "toolbar.js", "highlight.js", "highlight.css"):
         source = docs / "assets" / name
         target = media / name
         if not media.is_dir():
@@ -52,7 +52,7 @@ def main() -> int:
             f" * Source of truth: docs/assets/{name}. Re-run docs/build.py after changing\n"
             " * it, or the extension and the web editor will disagree.\n"
             " */\n"
-        )
+        )  # a CSS comment is also a valid JS comment, so one banner serves both
         target.write_text(banner + source.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"copied {target.relative_to(ROOT)} ({target.stat().st_size} bytes)")
 

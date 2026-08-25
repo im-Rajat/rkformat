@@ -11,6 +11,7 @@
   const vscode = acquireVsCodeApi();
 
   const source = document.getElementById("source");
+  const sourceLayer = document.getElementById("source-layer");
   const live = document.getElementById("live");
   const formatBar = document.getElementById("format-bar");
   const preview = document.getElementById("preview");
@@ -47,6 +48,10 @@
     if (previous === "live" && name !== "live") {
       // Leaving live editing: make sure the source reflects the last keystrokes.
       serializeLive({ immediate: true });
+    }
+    if (name !== "live") {
+      // The pane may have changed width, which changes where lines wrap.
+      scheduleHighlight();
     }
     try {
       vscode.setState(Object.assign({}, vscode.getState(), { layout: name }));
@@ -88,6 +93,47 @@
   });
 
   // -------------------------------------------------------------------- editing
+
+  // ------------------------------------------------------------- highlighting
+
+  // Above this size the highlighter is skipped and the source shown plain: re-tokenising a
+  // very large document on every keystroke is the one thing that would make typing lag.
+  const HIGHLIGHT_LIMIT = 400 * 1024;
+  let highlightFrame = null;
+
+  /**
+   * Repaint the highlighted layer under the textarea.
+   *
+   * The textarea is stretched to the layer's height because neither element scrolls on its
+   * own - the wrapper does. See the note at the top of highlight.css for why that matters.
+   */
+  function refreshHighlight() {
+    if (!sourceLayer) return;
+    const text = source.value;
+    if (text.length > HIGHLIGHT_LIMIT) {
+      sourceLayer.textContent = `${text}\n`;
+    } else {
+      sourceLayer.innerHTML = RKF.highlight.markdown(text);
+    }
+    source.style.height = `${sourceLayer.offsetHeight}px`;
+  }
+
+  /**
+   * Coalesce repaints across a burst of keystrokes.
+   *
+   * A timer rather than requestAnimationFrame: rAF only fires when the browser produces a
+   * frame, which a headless browser under a virtual clock does not, so the layer would never
+   * repaint under test. The guard means fast typing still costs one repaint per tick.
+   */
+  function scheduleHighlight() {
+    if (highlightFrame) return;
+    highlightFrame = setTimeout(() => {
+      highlightFrame = null;
+      refreshHighlight();
+    }, 16);
+  }
+
+  window.addEventListener("resize", scheduleHighlight);
 
   // ---------------------------------------------------------------- live editing
 
@@ -134,6 +180,7 @@
         setStatus("serialised to much less text - Ctrl+Z to undo");
       }
       source.value = markdown;
+      scheduleHighlight();
       vscode.postMessage({ type: "change", markdown, label: "Edit page" });
     };
     if (options.immediate) run();
@@ -399,6 +446,7 @@
       common += 1;
     }
     source.value = markdown;
+    refreshHighlight();
     if (document.activeElement === source) {
       const caret = Math.min(common, markdown.length);
       try {
@@ -427,6 +475,7 @@
   }
 
   source.addEventListener("input", () => {
+    scheduleHighlight();
     vscode.postMessage({ type: "change", markdown: source.value, label: "Typing" });
     schedulePreview();
   });
@@ -452,6 +501,7 @@
     const trail = after.startsWith("\n") ? "\n" : "\n\n";
     const payload = lead + text + trail;
     source.value = before + payload + after;
+    scheduleHighlight();
     const caret = start + payload.length;
     source.setSelectionRange(caret, caret);
     source.focus();
@@ -605,6 +655,7 @@
     switch (message.type) {
       case "init":
         source.value = message.markdown;
+        refreshHighlight();
         latestHtml = message.html || "";
         preview.innerHTML = latestHtml;
         live.innerHTML = latestHtml;

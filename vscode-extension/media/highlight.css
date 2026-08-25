@@ -1,0 +1,169 @@
+/* GENERATED COPY - do not edit.
+ *
+ * Source of truth: docs/assets/highlight.css. Re-run docs/build.py after changing
+ * it, or the extension and the web editor will disagree.
+ */
+/* Markdown source highlighting, shared by the web editor and the VS Code webview.
+ *
+ * A textarea cannot colour its text, so a highlighted layer sits behind a transparent one.
+ * The two only stay aligned if every metric that affects line breaking is identical, which is
+ * why those rules live here once rather than in each surface's stylesheet:
+ *
+ *   font family, size, weight, line height, letter spacing, tab size,
+ *   padding, white-space, overflow-wrap, box-sizing
+ *
+ * Neither layer scrolls on its own - the wrapper does. That matters: if the textarea had its
+ * own scrollbar, its content box would be narrower than the layer's by the scrollbar's width,
+ * lines would wrap at different points, and everything below the first wrap would drift.
+ * The layer is in normal flow so it defines the scroll height; the textarea is stretched to
+ * match it from script.
+ *
+ * Colours come from variables so each surface can theme them: the website follows
+ * prefers-color-scheme, and VS Code webviews get vscode-light / vscode-dark on the body.
+ */
+
+.rkf-source-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Every property below has to hold the same value on both layers. */
+.rkf-source-layer,
+.rkf-source-wrap > textarea {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  padding: var(--rkf-src-pad, 1.25rem clamp(1rem, 4%, 3rem));
+  box-sizing: border-box;
+  font-family: var(--rkf-src-font, ui-monospace, "SF Mono", Consolas, monospace);
+  font-size: var(--rkf-src-size, 13px);
+  font-weight: 400;
+  font-style: normal;
+  line-height: var(--rkf-src-line, 1.6);
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  text-align: left;
+  text-indent: 0;
+}
+
+.rkf-source-layer {
+  position: relative;
+  z-index: 1;
+  min-height: 100%;
+  pointer-events: none;
+  color: var(--rkf-tok-text, inherit);
+}
+
+.rkf-source-wrap > textarea {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  resize: none;
+  outline: none;
+  overflow: hidden; /* the wrapper scrolls; see the note above */
+  background: transparent;
+  color: transparent;
+  caret-color: var(--rkf-src-caret, currentColor);
+  -webkit-text-fill-color: transparent;
+}
+
+/* The text under a selection comes from the layer, so the highlight has to be translucent. */
+.rkf-source-wrap > textarea::selection {
+  background: var(--rkf-src-selection, rgba(110, 165, 255, 0.35));
+}
+
+/* --------------------------------------------------------------------- tokens */
+
+:root {
+  --rkf-tok-text: #d4d4d4;
+  --rkf-tok-marker: #7f7f8a;
+  --rkf-tok-heading: #6aa9e9;
+  --rkf-tok-strong: #6aa9e9;
+  --rkf-tok-em: #6aa9e9;
+  --rkf-tok-strike: #8a8a94;
+  --rkf-tok-code: #ce9178;
+  --rkf-tok-lang: #4ec9b0;
+  --rkf-tok-link: #7cc7ff;
+  --rkf-tok-alt: #9cdcfe;
+  --rkf-tok-url: #ce9178;
+  --rkf-tok-quote: #6a9955;
+  --rkf-tok-tag: #569cd6;
+  --rkf-tok-task: #4ec9b0;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --rkf-tok-text: #24292f;
+    --rkf-tok-marker: #8c959f;
+    --rkf-tok-heading: #0550ae;
+    --rkf-tok-strong: #0550ae;
+    --rkf-tok-em: #0550ae;
+    --rkf-tok-strike: #6e7781;
+    --rkf-tok-code: #a3391b;
+    --rkf-tok-lang: #0f766e;
+    --rkf-tok-link: #0969da;
+    --rkf-tok-alt: #0a5fa8;
+    --rkf-tok-url: #a3391b;
+    --rkf-tok-quote: #1a7f37;
+    --rkf-tok-tag: #0550ae;
+    --rkf-tok-task: #0f766e;
+  }
+}
+
+/* VS Code puts its theme kind on the webview body, so the same file themes both surfaces. */
+body.vscode-light {
+  --rkf-tok-text: #24292f;
+  --rkf-tok-marker: #8c959f;
+  --rkf-tok-heading: #0550ae;
+  --rkf-tok-strong: #0550ae;
+  --rkf-tok-em: #0550ae;
+  --rkf-tok-strike: #6e7781;
+  --rkf-tok-code: #a3391b;
+  --rkf-tok-lang: #0f766e;
+  --rkf-tok-link: #0969da;
+  --rkf-tok-alt: #0a5fa8;
+  --rkf-tok-url: #a3391b;
+  --rkf-tok-quote: #1a7f37;
+  --rkf-tok-tag: #0550ae;
+  --rkf-tok-task: #0f766e;
+}
+
+body.vscode-high-contrast {
+  --rkf-tok-text: #ffffff;
+  --rkf-tok-marker: #b0b0b0;
+  --rkf-tok-heading: #4fc1ff;
+  --rkf-tok-strong: #4fc1ff;
+  --rkf-tok-em: #4fc1ff;
+  --rkf-tok-code: #ffb86c;
+  --rkf-tok-url: #ffb86c;
+  --rkf-tok-quote: #7cd992;
+}
+
+.tok-marker { color: var(--rkf-tok-marker); }
+.tok-heading { color: var(--rkf-tok-heading); font-weight: 700; }
+.tok-strong { color: var(--rkf-tok-strong); font-weight: 700; }
+.tok-em { color: var(--rkf-tok-em); font-style: italic; }
+.tok-strong-em { color: var(--rkf-tok-strong); font-weight: 700; font-style: italic; }
+.tok-strike { color: var(--rkf-tok-strike); text-decoration: line-through; }
+.tok-code { color: var(--rkf-tok-code); }
+.tok-lang { color: var(--rkf-tok-lang); }
+.tok-link { color: var(--rkf-tok-link); }
+.tok-alt { color: var(--rkf-tok-alt); }
+.tok-url { color: var(--rkf-tok-url); text-decoration: underline; text-underline-offset: 2px; }
+.tok-quote { color: var(--rkf-tok-quote); }
+.tok-tag { color: var(--rkf-tok-tag); }
+.tok-task { color: var(--rkf-tok-task); font-weight: 700; }
+
+/* Bold and italic in the layer are a calculated risk: in a true monospace family they keep
+   the same advance width, so wrapping is unaffected, but a synthesised face need not. The
+   browser test measures the layer against the textarea on a bold- and italic-heavy document
+   and fails if the two heights diverge, so a font that misbehaves is caught rather than
+   quietly misaligning the editor. */
