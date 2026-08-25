@@ -20,6 +20,7 @@ import fixtures
 from rkformat import MIMETYPE, Asset, Manifest, RkDocument, is_rkf
 from rkformat.container import MANIFEST_MEMBER, MIMETYPE_MEMBER, markdown_ref
 from rkformat.errors import (
+    RkfError,
     RkfFormatError,
     RkfSecurityError,
     RkfValidationError,
@@ -94,7 +95,26 @@ def test_mimetype_member_is_first_and_uncompressed(tmp_path):
         infos = zf.infolist()
     assert infos[0].filename == MIMETYPE_MEMBER
     assert infos[0].compress_type == zipfile.ZIP_STORED
-    assert infos[1].filename == MANIFEST_MEMBER
+    assert infos[1].filename == "content.md"
+    assert infos[2].filename == MANIFEST_MEMBER
+
+
+def test_body_is_readable_in_a_plain_text_editor(tmp_path):
+    """The prose must be legible to someone with no .rkf tooling at all.
+
+    content.md is stored uncompressed and placed second, so the text appears in the clear
+    near the start of the file - what `cat`, `less` or Notepad would show.
+    """
+    doc = RkDocument.new(title="Readable")
+    doc.markdown = "# Readable\n\nA distinctive sentence in the body.\n"
+    doc.add_image_bytes(DIAGRAM, "diagram.png")
+    raw = doc.save(tmp_path / "s.rkf").read_bytes()
+
+    assert b"A distinctive sentence in the body." in raw
+    # ...and near the front, not buried behind the image payloads.
+    assert raw.index(b"A distinctive sentence") < 512
+    with zipfile.ZipFile(tmp_path / "s.rkf") as zf:
+        assert zf.getinfo("content.md").compress_type == zipfile.ZIP_STORED
 
 
 def test_unpacked_folder_is_plain_markdown(tmp_path):
@@ -342,6 +362,33 @@ def test_in_memory_document_falls_back_to_uncompressed_sizes():
     assert doc.asset_stored_total == doc.asset_bytes_total == len(DIAGRAM)
 
 
+# ---------------------------------------------------------------- generated files
+
+
+def test_generated_extension_copies_are_current():
+    """docs/build.py copies shared assets into the extension; they must not drift."""
+    root = Path(__file__).resolve().parents[1]
+    pairs = [
+        (root / "docs" / "assets" / "tomarkdown.js", root / "vscode-extension" / "media" / "tomarkdown.js"),
+    ]
+    for source, copy in pairs:
+        if not copy.is_file():
+            continue  # the extension folder is optional in a source checkout
+        assert source.read_text() in copy.read_text(), (
+            f"{copy.name} is stale - run python3 docs/build.py"
+        )
+
+
+def test_generated_stylesheet_matches_page_css():
+    root = Path(__file__).resolve().parents[1]
+    generated = root / "docs" / "assets" / "document.css"
+    if not generated.is_file():
+        return
+    from rkformat.render import PAGE_CSS
+
+    assert PAGE_CSS in generated.read_text(), "document.css is stale - run python3 docs/build.py"
+
+
 # ------------------------------------------------------------------------ render
 
 
@@ -349,7 +396,10 @@ def test_render_inlines_images_and_captions_them():
     html = to_html(sample())
     assert "data:image/png;base64," in html
     assert "<figcaption>A diagram</figcaption>" in html
-    assert 'width="320" height="180"' in html
+    # Asserted separately: the sanitising pass emits attributes in sorted order, so their
+    # adjacency is not part of the contract.
+    assert 'width="320"' in html
+    assert 'height="180"' in html
 
 
 def test_render_marks_dangling_references():
@@ -358,11 +408,46 @@ def test_render_marks_dangling_references():
     assert 'data-rkf-dangling="assets/gone.png"' in html
 
 
-def test_render_does_not_pass_through_html_by_default():
+def test_render_never_passes_script_through():
     doc = RkDocument.new(markdown="<script>alert(1)</script>\n\nsafe\n")
-    assert "<script>" not in to_html(doc)
-    assert "&lt;script&gt;" in to_html(doc)
-    assert "<script>" in to_html(doc, allow_html=True)
+    sanitised = to_html(doc)
+    assert "<script>" not in sanitised
+    assert "alert(1)" not in sanitised  # dropped with its content, not merely escaped
+    assert "safe" in sanitised
+    assert "&lt;script&gt;" in to_html(doc, html="escape")
+    assert "<script>" in to_html(doc, html="raw")  # opt-in, for documents you wrote
+
+
+def test_html_image_resolves_to_an_embedded_asset():
+    doc = RkDocument.new()
+    doc.add_image_bytes(DIAGRAM, "diagram.png")
+    doc.markdown = '<img src="assets/diagram.png" alt="drawing" width="200"/>\n'
+    html = to_html(doc)
+    assert "data:image/png;base64," in html
+    assert 'width="200"' in html          # the author's size is respected
+    assert 'height="180"' not in html     # ...so intrinsic dimensions are not forced
+    assert "rkf-image" in html
+
+
+def test_html_allowlist_survives_a_second_pass():
+    """Sanitising is idempotent, so re-rendering cannot degrade a document."""
+    from rkformat.sanitize import sanitize
+
+    markup = (
+        '<div align="center"><b>bold</b> <kbd>K</kbd>'
+        '<img src="x.png" width="10"></div>'
+    )
+    once = sanitize(markup)
+    assert sanitize(once) == once
+
+
+def test_render_rejects_an_unknown_html_mode():
+    try:
+        to_html(RkDocument.new(), html="whatever")
+    except RkfError as exc:
+        assert "html must be one of" in str(exc)
+    else:
+        raise AssertionError("an invalid html mode was accepted")
 
 
 # ------------------------------------------------------- standalone test runner

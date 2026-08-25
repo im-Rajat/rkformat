@@ -21,9 +21,11 @@ container overhead  642 B
 ```
 
 It is a ZIP container underneath, the same way `.docx`, `.odt` and `.epub` are. That buys
-three things worth having: images stored as raw bytes rather than base64, random access to
-a single image without reading the whole document, and **graceful degradation** — rename it
-to `.zip`, extract it, and `content.md` is ordinary Markdown with working relative links.
+four things worth having: images stored as raw bytes rather than base64, random access to
+a single image without reading the whole document, **graceful degradation** — rename it
+to `.zip`, extract it, and `content.md` is ordinary Markdown with working relative links —
+and **legibility with no tooling at all**: the body is stored uncompressed and placed first,
+so opening a `.rkf` in Notepad or `less` shows readable Markdown after a short header.
 
 See [SPEC.md](SPEC.md) for the format itself, and
 [examples/welcome.rkf](examples/welcome.rkf) for a document to open — rebuild it any time
@@ -99,6 +101,46 @@ print(reopened.asset_bytes("a1")[:8])                    # raw PNG bytes back ou
 open("report.html", "w").write(reopened.to_html())       # via rkformat.render.to_html
 ```
 
+## Raw HTML is supported
+
+Markdown permits raw HTML, so this works — and points at the **embedded** image, not a file
+on disk:
+
+```html
+<img src="assets/diagram.png" alt="drawing" width="200"/>
+```
+
+An `<img>` in HTML is resolved against the asset table exactly like `![alt](assets/x.png)`,
+so a dangling `src` is reported by `rk check` the same way. `<div align>`, `<kbd>`, `<sub>`,
+`<details>`, `<table>`, `<span style>` and the rest of the text-level vocabulary all work.
+
+Because a document arrives from someone else, HTML is **rebuilt from an allowlist** rather
+than passed through. Script-bearing elements are dropped with their contents, event-handler
+attributes and unknown URL schemes are removed, and `style` is limited to a fixed set of
+harmless properties. Three modes:
+
+```bash
+rk render doc.rkf                  # sanitize (default)
+rk render doc.rkf --html escape    # show the markup as literal text
+rk render doc.rkf --html raw       # pass through untouched; only for your own documents
+```
+
+The reference implementations are [rkformat/sanitize.py](src/rkformat/sanitize.py) and
+[docs/assets/sanitize.js](docs/assets/sanitize.js), and the parity test diffs them over a
+battery of hostile inputs.
+
+## Reading one without any tooling
+
+Three routes, in increasing order of fidelity:
+
+1. **Any text editor.** The body is stored uncompressed and first, so `cat`, `less`, Notepad
+   or a mail-client preview shows the Markdown after ~60 bytes of ZIP header. Images appear
+   as `![alt](assets/x.png)` references rather than pictures, which is the point — the prose
+   is never trapped.
+2. **The web viewer** below: full rendering, nothing to install.
+3. **`rk cat doc.rkf`**, or *RK: View Markdown as Plain Text* in VS Code, which opens the
+   body as a read-only `.md` editor with highlighting and search.
+
 ## Read one in the browser
 
 [**im-rajat.github.io/rkformat**](https://im-rajat.github.io/rkformat/) opens a `.rkf`
@@ -140,10 +182,30 @@ installed.
 
 ## Edit it in VS Code
 
-[vscode-extension/](vscode-extension/) is a custom editor: Markdown source on the left, a
-Word-like rendered page on the right, and **paste or drag an image straight into the
-document**. It has no dependencies and no build step — it shells out to the `rk` CLI, so the
-editor and the command line can never disagree about what a document means.
+[vscode-extension/](vscode-extension/) is a custom editor with four modes:
+
+| Mode | What it is |
+|---|---|
+| **Live** | Type straight into the rendered page, like a word processor. Formatting toolbar, Ctrl+B/I/K. |
+| **Split** | Markdown source beside a live preview. |
+| **Source** | Markdown only. |
+| **Preview** | Rendered page only. |
+
+**Paste or drag an image straight in** and it is embedded in the file. The extension has no
+dependencies and no build step — it shells out to the `rk` CLI, so the editor and the command
+line can never disagree about what a document means.
+
+Live mode works by turning the edited page back into Markdown on every keystroke
+([tomarkdown.js](docs/assets/tomarkdown.js)). That direction is inherently lossy, so the rule
+is: emit Markdown where Markdown can express something exactly, and keep verbatim HTML where
+it cannot — an author's `<img width="200">` survives a round trip rather than being flattened.
+The invariant under test is not that the Markdown text is unchanged (`*x*` and `_x_` are both
+fine) but that **rendering is stable**:
+
+    render(toMarkdown(render(md))) === render(md)
+
+so a WYSIWYG edit never degrades the document. Source remains canonical; if Live mode ever
+does something you did not intend, the Markdown is right there in Source.
 
 ```bash
 cd vscode-extension && ./install.sh
@@ -179,11 +241,12 @@ paragraph styles, you need `.docx`.
 ## Tests
 
 ```bash
-pytest                          # the format library - or, with no pytest installed:
+pytest                           # the format library - or, with no pytest installed:
 python3 tests/test_rkformat.py
 
-node tests/test_site_parity.js   # browser renderer vs. `rk render`, 57 fixtures
-tests/test_site_browser.sh       # drives headless Chrome over the viewer
+node tests/test_site_parity.js   # browser renderer vs. `rk render`, 102 fixtures
+tests/test_site_browser.sh       # headless Chrome: the viewer, the WYSIWYG round trip,
+                                 # and live editing driven through the real webview shell
 ```
 
 The Python suite covers round-tripping, determinism, reference resolution (including
@@ -192,7 +255,8 @@ synthesised with the standard library, so there are no binary files in the repo 
 demo document.
 
 `test_site_browser.sh` needs a Chrome or Chromium binary and skips cleanly if there isn't
-one, so it never turns into a false failure.
+one, so it never turns into a false failure. It builds its live-editing harness by lifting
+the webview's actual HTML out of `extension.js`, so the test cannot drift from what ships.
 
 ## Layout
 
@@ -203,6 +267,7 @@ one, so it never turns into a false failure.
 | [src/rkformat/manifest.py](src/rkformat/manifest.py) | `manifest.json` model |
 | [src/rkformat/imageinfo.py](src/rkformat/imageinfo.py) | Stdlib-only image sniffing |
 | [src/rkformat/render.py](src/rkformat/render.py) | HTML rendering and page styles |
+| [src/rkformat/sanitize.py](src/rkformat/sanitize.py) | HTML allowlist for author markup |
 | [src/rkformat/cli.py](src/rkformat/cli.py) | The `rk` command |
 | [vscode-extension/](vscode-extension/) | VS Code custom editor |
 | [docs/](docs/) | The browser viewer, served by GitHub Pages |
@@ -214,7 +279,11 @@ one, so it never turns into a false failure.
   text, as a `--text-safe` export alongside the canonical ZIP.
 - **Editing in the browser viewer.** It is read-only today; writing a ZIP client-side with
   `CompressionStream` is very doable, but saving back to wherever the file came from is the
-  actual problem.
+  actual problem. The WYSIWYG editor and the serialiser it needs already exist and are
+  browser-side, so this is mostly a save-target question.
+- **Markdown input rules in Live mode** — typing `# ` or `- ` at the start of a line could
+  format as you go, the way a word processor autocorrects. Today formatting is by toolbar
+  and keyboard shortcut.
 - **TextBundle interop** — `.textbundle`/`.textpack` is a near-identical layout, so
   import/export would be cheap and buys compatibility with Ulysses, Bear and iA Writer.
 - Non-image assets with richer typing, and a thumbnail cache in `meta/` for fast listing.

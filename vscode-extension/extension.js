@@ -66,6 +66,12 @@ async function resolveArgv() {
   );
 }
 
+/** Raw-HTML policy for renders, validated so a stale setting cannot break the CLI call. */
+function htmlMode() {
+  const mode = settings().get("html");
+  return ["sanitize", "escape", "raw"].includes(mode) ? mode : "sanitize";
+}
+
 function childEnv() {
   const env = Object.assign({}, process.env);
   const extra = settings().get("extraPythonPath");
@@ -159,9 +165,7 @@ class RkfEditorProvider {
 
   async openCustomDocument(uri, openContext) {
     const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
-    const snapshot = await rkJson(["export-json", source.fsPath].concat(
-      settings().get("allowHtml") ? ["--allow-html"] : []
-    ));
+    const snapshot = await rkJson(["export-json", source.fsPath, "--html", htmlMode()]);
     const document = new RkfDocument(uri, snapshot);
     if (openContext.backupId) {
       // Restoring after a crash: the backup holds the unsaved body.
@@ -218,9 +222,10 @@ class RkfEditorProvider {
 <body class="rkf-editor">
   <header id="toolbar">
     <div class="group" role="group" aria-label="Layout">
-      <button data-layout="source" title="Source only">Source</button>
+      <button data-layout="live" title="Type directly into the page (WYSIWYG)">Live</button>
+      <button data-layout="source" title="Markdown source only">Source</button>
       <button data-layout="split" title="Source and preview">Split</button>
-      <button data-layout="preview" title="Preview only">Preview</button>
+      <button data-layout="preview" title="Rendered page only">Preview</button>
     </div>
     <div class="group">
       <button id="insert-image" title="Embed an image file">Insert image</button>
@@ -230,7 +235,31 @@ class RkfEditorProvider {
     <div class="spacer"></div>
     <div id="status" aria-live="polite"></div>
   </header>
+  <div id="format-bar" role="toolbar" aria-label="Formatting" hidden>
+    <button data-format="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button data-format="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button data-format="strikethrough" title="Strikethrough"><s>S</s></button>
+    <button data-format="code" title="Inline code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <button data-format="h1" title="Heading 1">H1</button>
+    <button data-format="h2" title="Heading 2">H2</button>
+    <button data-format="h3" title="Heading 3">H3</button>
+    <button data-format="p" title="Body text">&para;</button>
+    <span class="sep"></span>
+    <button data-format="ul" title="Bulleted list">&bull; List</button>
+    <button data-format="ol" title="Numbered list">1. List</button>
+    <button data-format="quote" title="Block quote">&ldquo;</button>
+    <button data-format="pre" title="Code block">Code</button>
+    <span class="sep"></span>
+    <button data-format="link" title="Insert link (Ctrl+K)">Link</button>
+    <button data-format="table" title="Insert a 3-column table">Table</button>
+    <button data-format="hr" title="Horizontal rule">&mdash;</button>
+  </div>
   <main id="panes">
+    <section id="live-pane">
+      <div id="live" class="rkf-page" contenteditable="true" spellcheck="true"
+           role="textbox" aria-multiline="true" aria-label="Document"></div>
+    </section>
     <section id="source-pane">
       <textarea id="source" spellcheck="true" aria-label="Markdown source"
         placeholder="Write Markdown. Paste or drop an image to embed it in this file."></textarea>
@@ -240,6 +269,7 @@ class RkfEditorProvider {
   </main>
   <aside id="assets" hidden><div id="asset-list"></div></aside>
   <footer id="problems" hidden></footer>
+  <script nonce="${nonce}" src="${media("tomarkdown.js")}"></script>
   <script nonce="${nonce}" src="${media("editor.js")}"></script>
 </body>
 </html>`;
@@ -280,14 +310,13 @@ class RkfEditorProvider {
 
       case "requestPreview": {
         const result = await rkJson(
-          ["preview", document.uri.fsPath].concat(
-            settings().get("allowHtml") ? ["--allow-html"] : []
-          ),
+          ["preview", document.uri.fsPath, "--html", htmlMode()],
           { markdown: message.markdown }
         );
         panel.webview.postMessage({
           type: "preview",
           seq: message.seq,
+          forLive: Boolean(message.forLive),
           html: result.html,
           problems: result.problems,
           assets: result.assets,
@@ -386,6 +415,7 @@ class RkfEditorProvider {
     await rkJson(["import-json", document.uri.fsPath], { markdown: document.markdown });
     document.savedMarkdown = document.markdown;
     await this.refresh(document);
+    if (this.textProvider) this.textProvider.refresh(document.uri);
   }
 
   async saveCustomDocumentAs(document, destination) {
@@ -532,9 +562,60 @@ async function commandGc(uri) {
   vscode.window.showInformationMessage(`RK Document: ${output.trim().split("\n").pop()}`);
 }
 
+// ------------------------------------------------------- plain-text Markdown view
+
+const TEXT_SCHEME = "rkf-md";
+
+/**
+ * Exposes a document's Markdown body as a read-only text editor.
+ *
+ * A .rkf is a ZIP, so opening it with the built-in text editor shows binary. This serves
+ * the body as a virtual `.md` document instead, which gives syntax highlighting, find,
+ * outline and copy-paste for free. Read-only on purpose: edits belong in the .rkf editor,
+ * which knows how to write the container back.
+ */
+class MarkdownTextProvider {
+  constructor() {
+    this._onDidChange = new vscode.EventEmitter();
+    this.onDidChange = this._onDidChange.event;
+  }
+
+  /** rkf-md:/<name>.md?<absolute path of the .rkf> */
+  static uriFor(source) {
+    const name = path.basename(source.fsPath).replace(/\.(rkf|rk)$/i, "");
+    return vscode.Uri.parse(
+      `${TEXT_SCHEME}:/${encodeURIComponent(name)}.md?${encodeURIComponent(source.fsPath)}`
+    );
+  }
+
+  refresh(source) {
+    this._onDidChange.fire(MarkdownTextProvider.uriFor(source));
+  }
+
+  async provideTextDocumentContent(uri) {
+    const target = decodeURIComponent(uri.query);
+    try {
+      return await rk(["cat", target]);
+    } catch (err) {
+      return `Could not read ${target}\n\n${err.message}\n`;
+    }
+  }
+}
+
+async function commandOpenAsText(uri) {
+  const source = await pickRkf(uri);
+  if (!source) return;
+  const document = await vscode.workspace.openTextDocument(MarkdownTextProvider.uriFor(source));
+  await vscode.languages.setTextDocumentLanguage(document, "markdown");
+  await vscode.window.showTextDocument(document, { preview: false, viewColumn: vscode.ViewColumn.Beside });
+}
+
 function activate(context) {
   const provider = new RkfEditorProvider(context);
+  const textProvider = new MarkdownTextProvider();
+  provider.textProvider = textProvider;
   context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(TEXT_SCHEME, textProvider),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("rkformat.command")) resolvedArgv = null;
     }),
@@ -548,6 +629,16 @@ function activate(context) {
     vscode.commands.registerCommand("rkformat.pack", (uri) => guard(commandPack(uri))),
     vscode.commands.registerCommand("rkformat.check", (uri) => guard(commandCheck(uri))),
     vscode.commands.registerCommand("rkformat.gc", (uri) => guard(commandGc(uri))),
+    vscode.commands.registerCommand("rkformat.openAsText", (uri) => guard(commandOpenAsText(uri))),
+    vscode.commands.registerCommand("rkformat.toggleLive", () => {
+      const uri = activeRkfUri();
+      const panels = uri && provider.panels.get(uri.fsPath);
+      if (!panels || !panels.size) {
+        vscode.window.showWarningMessage("RK Document: focus an .rkf editor first.");
+        return;
+      }
+      for (const panel of panels) panel.webview.postMessage({ type: "setLayout", layout: "live" });
+    }),
     vscode.commands.registerCommand("rkformat.insertImage", () => {
       const uri = activeRkfUri();
       const panels = uri && provider.panels.get(uri.fsPath);

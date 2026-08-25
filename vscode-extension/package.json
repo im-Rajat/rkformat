@@ -1,13 +1,23 @@
 {
   "name": "rkformat",
   "displayName": "RK Document (.rkf)",
-  "description": "View and edit .rkf compound documents — Markdown with its images embedded in a single file.",
-  "version": "0.1.0",
+  "description": "View and edit .rkf compound documents - Markdown with its images embedded in a single file. Live WYSIWYG editing, split preview, and paste-to-embed.",
+  "version": "0.2.0",
   "publisher": "rkformat",
   "license": "MIT",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other", "Visualization"],
-  "keywords": ["markdown", "rkf", "document", "images"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "markdown",
+    "rkf",
+    "document",
+    "images"
+  ],
   "main": "./extension.js",
   "activationEvents": [],
   "contributes": {
@@ -15,18 +25,56 @@
       {
         "viewType": "rkformat.editor",
         "displayName": "RK Document",
-        "selector": [{ "filenamePattern": "*.rkf" }, { "filenamePattern": "*.rk" }],
+        "selector": [
+          {
+            "filenamePattern": "*.rkf"
+          },
+          {
+            "filenamePattern": "*.rk"
+          }
+        ],
         "priority": "default"
       }
     ],
     "commands": [
-      { "command": "rkformat.new", "title": "RK: New Document", "icon": "$(new-file)" },
-      { "command": "rkformat.insertImage", "title": "RK: Insert Image", "icon": "$(device-camera)" },
-      { "command": "rkformat.render", "title": "RK: Export Self-Contained HTML" },
-      { "command": "rkformat.unpack", "title": "RK: Unpack to Markdown Folder" },
-      { "command": "rkformat.pack", "title": "RK: Pack Markdown File into .rkf" },
-      { "command": "rkformat.check", "title": "RK: Validate Document" },
-      { "command": "rkformat.gc", "title": "RK: Remove Unreferenced Images" }
+      {
+        "command": "rkformat.new",
+        "title": "RK: New Document",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "rkformat.insertImage",
+        "title": "RK: Insert Image",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "rkformat.render",
+        "title": "RK: Export Self-Contained HTML"
+      },
+      {
+        "command": "rkformat.unpack",
+        "title": "RK: Unpack to Markdown Folder"
+      },
+      {
+        "command": "rkformat.pack",
+        "title": "RK: Pack Markdown File into .rkf"
+      },
+      {
+        "command": "rkformat.check",
+        "title": "RK: Validate Document"
+      },
+      {
+        "command": "rkformat.gc",
+        "title": "RK: Remove Unreferenced Images"
+      },
+      {
+        "command": "rkformat.openAsText",
+        "title": "RK: View Markdown as Plain Text"
+      },
+      {
+        "command": "rkformat.toggleLive",
+        "title": "RK: Toggle Live (WYSIWYG) Editing"
+      }
     ],
     "menus": {
       "explorer/context": [
@@ -44,11 +92,30 @@
           "command": "rkformat.render",
           "when": "resourceExtname =~ /\\.(rkf|rk)$/",
           "group": "rkformat"
+        },
+        {
+          "command": "rkformat.openAsText",
+          "when": "resourceExtname =~ /\\.(rkf|rk)$/",
+          "group": "rkformat"
         }
       ],
       "commandPalette": [
-        { "command": "rkformat.insertImage", "when": "activeCustomEditorId == rkformat.editor" },
-        { "command": "rkformat.gc", "when": "activeCustomEditorId == rkformat.editor" }
+        {
+          "command": "rkformat.insertImage",
+          "when": "activeCustomEditorId == rkformat.editor"
+        },
+        {
+          "command": "rkformat.gc",
+          "when": "activeCustomEditorId == rkformat.editor"
+        },
+        {
+          "command": "rkformat.openAsText",
+          "when": "resourceExtname =~ /\\.(rkf|rk)$/"
+        },
+        {
+          "command": "rkformat.toggleLive",
+          "when": "activeCustomEditorId == rkformat.editor"
+        }
       ]
     },
     "configuration": {
@@ -56,8 +123,14 @@
       "properties": {
         "rkformat.command": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["python3", "-m", "rkformat"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "python3",
+            "-m",
+            "rkformat"
+          ],
           "markdownDescription": "Command used to invoke the `rk` tool. Use `[\"rk\"]` if the package is installed on PATH."
         },
         "rkformat.extraPythonPath": {
@@ -67,19 +140,40 @@
         },
         "rkformat.defaultLayout": {
           "type": "string",
-          "enum": ["split", "preview", "source"],
+          "enum": [
+            "live",
+            "split",
+            "preview",
+            "source"
+          ],
           "default": "split",
-          "description": "Which panes to show when a document opens."
-        },
-        "rkformat.allowHtml": {
-          "type": "boolean",
-          "default": false,
-          "description": "Render raw HTML embedded in the Markdown body. Off by default: a .rkf may come from someone else."
+          "description": "Which panes to show when a document opens.",
+          "enumDescriptions": [
+            "Type directly into the rendered page, like a word processor.",
+            "Markdown source beside a live preview.",
+            "Rendered page only.",
+            "Markdown source only."
+          ]
         },
         "rkformat.previewDebounceMs": {
           "type": "number",
           "default": 250,
           "description": "Idle time before the preview re-renders while you type."
+        },
+        "rkformat.html": {
+          "type": "string",
+          "enum": [
+            "sanitize",
+            "escape",
+            "raw"
+          ],
+          "enumDescriptions": [
+            "Allow HTML, rebuilt against an allowlist. <img src=\"assets/x.png\" width=\"200\"> works; script cannot.",
+            "Show raw HTML as literal text.",
+            "Pass HTML through untouched. Only for documents you wrote yourself."
+          ],
+          "default": "sanitize",
+          "markdownDescription": "How raw HTML in the document body is handled."
         }
       }
     }

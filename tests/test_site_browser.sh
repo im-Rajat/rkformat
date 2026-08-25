@@ -33,18 +33,40 @@ fi
 echo "using $chrome"
 
 python3 "$root/docs/build.py" >/dev/null || { echo "docs/build.py failed"; exit 1; }
-(cd "$root/docs" && python3 -m http.server "$port" >/dev/null 2>&1) &
+(cd "$root" && python3 -m http.server "$port" >/dev/null 2>&1) &
 server_pid=$!
 # curl handles the wait itself, so this needs no sleep loop.
 if ! curl -sf --retry 30 --retry-delay 1 --retry-connrefused \
-     "http://localhost:$port/index.html" >/dev/null 2>&1; then
+     "http://localhost:$port/docs/index.html" >/dev/null 2>&1; then
   echo "could not start a server on port $port"
   exit 1
 fi
 
 dump() {
   "$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=9000 \
-    --dump-dom "http://localhost:$port/index.html$1" 2>/dev/null
+    --dump-dom "http://localhost:$port/docs/index.html$1" 2>/dev/null
+}
+
+dump_page() {
+  "$chrome" --headless --disable-gpu --no-sandbox --virtual-time-budget=12000 \
+    --dump-dom "http://localhost:$port/$1" 2>/dev/null
+}
+
+# Pull a "<n>/<m> ... ALL X" summary line out of a harness page and report on it.
+summary_check() { # summary_check <label> <dom-file> <element-id>
+  local label="$1" file="$2" id="$3" line
+  line="$(python3 - "$file" "$id" <<'PYS'
+import html, re, sys
+dom = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+found = re.search(rf'<div id="{re.escape(sys.argv[2])}">(.*?)</div>', dom, re.S)
+print(html.unescape(found.group(1)).strip() if found else "NO SUMMARY (script error)")
+PYS
+)"
+  echo "  $line"
+  case "$line" in
+    *"ALL STABLE"*|*"ALL PASSED"*) echo "  ok    $label" ;;
+    *) echo "  FAIL  $label"; failures=$((failures + 1)) ;;
+  esac
 }
 
 failures=0
@@ -101,6 +123,16 @@ rm -f "$root/docs/_test_plain.rkf"
 echo "--- a missing file ---"
 dump "?url=_test_absent.rkf" > "$work/absent.html"
 check "404 reported" '-ge 1' 'answered 404' "$work/absent.html"
+
+echo "--- WYSIWYG round trip (rendering must be stable) ---"
+dump_page "tests/wysiwyg_roundtrip.html" > "$work/roundtrip.html"
+summary_check "markdown -> html -> markdown is stable" "$work/roundtrip.html" "summary"
+
+echo "--- live editing in the extension webview ---"
+python3 "$root/tests/make_live_harness.py" "$root/tests/live_harness.generated.html" >/dev/null
+dump_page "tests/live_harness.generated.html" > "$work/live.html"
+summary_check "live editing drives the real webview shell" "$work/live.html" "harness-summary"
+rm -f "$root/tests/live_harness.generated.html"
 
 echo
 if [ "$failures" -eq 0 ]; then

@@ -12,8 +12,11 @@ separate image folder.
 3. **Graceful degradation.** The text payload is *unmodified CommonMark*. Rename the file
    to `.zip`, extract it, and `content.md` opens in any Markdown editor with working
    relative image links.
-4. **Random access.** A viewer can read one image without parsing the whole document.
-5. **Forward compatible.** Readers preserve entries they don't understand on round-trip.
+4. **Legible with no tooling.** The body is stored uncompressed and placed first, so the
+   prose appears in the clear within the first few hundred bytes. Opened in Notepad, `less`,
+   or a mail-client preview, a `.rkf` shows readable Markdown after a short header.
+5. **Random access.** A viewer can read one image without parsing the whole document.
+6. **Forward compatible.** Readers preserve entries they don't understand on round-trip.
 
 ## 2. Physical layout
 
@@ -23,13 +26,19 @@ alias. Media type: `application/vnd.rkformat+zip`.
 ```
 document.rkf
 ├── mimetype              # FIRST entry, STORED (uncompressed), no extra field
+├── content.md            # SECOND entry, STORED — CommonMark body, the text payload
 ├── manifest.json         # document metadata + asset table
-├── content.md            # CommonMark body — the text payload
 ├── assets/               # binary payloads
 │   ├── diagram.png
 │   └── photo.jpg
 └── meta/                 # OPTIONAL free-form sidecar data
 ```
+
+Writers **should** emit members in that order, and **should** store the body uncompressed.
+That is what makes design goal 4 hold: the prose lands within the first few hundred bytes
+of the file, in the clear, so a plain text editor shows something readable. It costs a
+little size on the text, which is negligible beside the images. Readers **must not** rely
+on the ordering — a conforming document may list members in any order.
 
 ### 2.1 `mimetype`
 
@@ -110,6 +119,26 @@ against `manifest.assets[].id`:
 References that resolve to neither a manifest asset nor an archive member are **dangling**
 and must be reported by `rk check`, not silently dropped.
 
+### 2.4 Raw HTML in the body
+
+CommonMark permits raw HTML, and documents use it - most often to size an image:
+
+```html
+<img src="assets/diagram.png" alt="drawing" width="200"/>
+```
+
+Renderers **must** treat an `<img>` in raw HTML exactly like Markdown image syntax: its
+`src` is resolved against the asset table by the rules in section 2.3, and a `src` that
+resolves to nothing is dangling.
+
+Because a `.rkf` arrives from someone else, renderers **must not** pass author HTML through
+untouched by default. The required default is to rebuild it from an allowlist of tags and
+attributes, dropping anything else - script-bearing elements together with their contents,
+event-handler attributes, and URL schemes other than `http`, `https`, `mailto`, `tel`,
+`blob`, `data:image/*` and relative paths. A renderer may offer escaping (show the markup
+as text) or pass-through as explicit opt-ins. `rkformat.sanitize` and
+`docs/assets/sanitize.js` are the reference implementations.
+
 ## 3. Integrity rules
 
 A document is **valid** when all of the following hold:
@@ -143,7 +172,9 @@ Readers **must**:
 Writers choose per member:
 
 - `mimetype` is always **stored** (required by section 2.1).
-- `manifest.json` and the content file are **deflated**.
+- The content file is **stored**, so the body is readable without decompression
+  (section 2, design goal 4).
+- `manifest.json` is **deflated**.
 - Assets whose media type is already entropy-coded — `image/jpeg`, `image/webp`,
   `image/avif`, `image/heic`, `image/gif` — are **stored**. Deflating them costs CPU on
   every save and returns under 1%.

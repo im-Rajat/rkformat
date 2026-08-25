@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>WYSIWYG round-trip test</title>
+</head>
+<body>
+<h1>WYSIWYG round-trip test</h1>
+<p>
+  Checks that rendering is <strong>stable</strong> across a Markdown -&gt; HTML -&gt; Markdown
+  round trip, which is what WYSIWYG editing does on every keystroke:
+</p>
+<pre>render(toMarkdown(render(md))) === render(md)</pre>
+<p>
+  Equality of the Markdown itself is deliberately not asserted: <code>*x*</code> and
+  <code>_x_</code> are both correct, so only the rendered result has to be stable.
+</p>
+<div id="results"></div>
+<div id="summary"></div>
+<div id="scratch" style="display:none"></div>
+
+<script src="../docs/assets/sanitize.js"></script>
+<script src="../docs/assets/markdown.js"></script>
+<script src="../docs/assets/tomarkdown.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // Stand-in for a document's embedded assets.
+  const ASSETS = {
+    "assets/gradient.png": { url: "data:image/png;base64,AAAA", width: 640, height: 200 },
+    "assets/chart.png": { url: "data:image/png;base64,BBBB", width: 560, height: 300 },
+  };
+  const resolveImage = (src) => ASSETS[String(src).replace(/^\.?\//, "")] || null;
+  const render = (md) => RKF.markdown.render(md, { resolveImage });
+
+  const FIXTURES = [
+    ["heading", "# Title\n\n## Sub\n"],
+    ["paragraphs", "First para.\n\nSecond para.\n"],
+    ["emphasis", "*em* and **strong** and ~~struck~~\n"],
+    ["nested emphasis", "**bold with *em* inside**\n"],
+    ["inline code", "Use `rk info` here.\n"],
+    ["code with backticks", "A ``code ` span`` here.\n"],
+    ["link", "[text](https://example.com)\n"],
+    ["link with title", '[text](https://example.com "Title")\n'],
+    ["autolink", "<https://example.com>\n"],
+    ["bullet list", "- one\n- two\n"],
+    ["ordered list", "1. one\n2. two\n"],
+    ["ordered start", "5. five\n6. six\n"],
+    ["nested list", "- outer\n  - inner\n- outer two\n"],
+    ["loose list", "- one\n\n- two\n"],
+    ["blockquote", "> quoted text\n"],
+    ["quote with emphasis", "> quoted *em*\n"],
+    ["hr", "before\n\n---\n\nafter\n"],
+    ["fenced code", "```python\nprint('hi')\n```\n"],
+    ["fenced no language", "```\nplain\n```\n"],
+    ["table", "| a | b |\n| --- | --- |\n| 1 | 2 |\n"],
+    ["table aligned", "| l | c | r |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |\n"],
+    ["table inline", "| **a** | `b` |\n| --- | --- |\n| *i* | [l](https://e.com) |\n"],
+    ["markdown image", "![A gradient](assets/gradient.png)\n"],
+    ["image in text", "Text ![chart](assets/chart.png) more.\n"],
+    ["image no alt", "![](assets/chart.png)\n"],
+    ["html image sized", '<img src="assets/gradient.png" alt="drawing" width="200"/>\n'],
+    ["html image plain", '<img src="assets/chart.png" alt="c">\n'],
+    ["html kbd", "Press <kbd>Ctrl</kbd>+<kbd>V</kbd>.\n"],
+    ["html sub sup", "H<sub>2</sub>O and x<sup>2</sup>\n"],
+    ["html mark", "a <mark>highlight</mark> b\n"],
+    ["html div align", '<div align="center">centred</div>\n'],
+    ["html span style", '<span style="color:#f00">red</span>\n'],
+    ["hard break", "line one  \nline two\n"],
+    ["escaped chars", "a \\* not emphasis \\* b\n"],
+    ["underscore in word", "snake_case_name stays\n"],
+    ["special chars", "5 < 6 & 7 > 3\n"],
+    ["unicode", "café 你好 🚀\n"],
+    ["image after list", "- one\n- two\n\n![A gradient](assets/gradient.png)\n"],
+    ["list then paragraph", "- one\n- two\n\nAfter the list.\n"],
+    ["mixed document",
+      "# Report\n\nIntro with **bold** and a [link](https://example.com).\n\n" +
+      "## Data\n\n| Region | Revenue |\n| :-- | --: |\n| North | 1,200 |\n\n" +
+      "![A gradient](assets/gradient.png)\n\n" +
+      "1. First\n2. Second with `code`\n\n> A quote.\n\n```bash\nrk info x.rkf\n```\n"],
+  ];
+
+  const normalise = (html) =>
+    html.replace(/\r\n?/g, "\n").replace(/>\s+</g, "><").replace(/\s+/g, " ").trim();
+
+  const scratch = document.getElementById("scratch");
+  const results = document.getElementById("results");
+  let failures = 0;
+
+  for (const [name, markdown] of FIXTURES) {
+    let row;
+    try {
+      const html1 = render(markdown);
+      scratch.innerHTML = html1;
+      const markdown2 = RKF.toMarkdown(scratch);
+      const html2 = render(markdown2);
+      const stable = normalise(html1) === normalise(html2);
+      if (!stable) failures += 1;
+      row = document.createElement("div");
+      row.className = stable ? "pass" : "fail";
+      row.textContent = `${stable ? "ok" : "FAIL"}  ${name}`;
+      if (!stable) {
+        const detail = document.createElement("pre");
+        detail.textContent =
+          `markdown in:\n${markdown}\nmarkdown out:\n${markdown2}\n` +
+          `html in:\n${normalise(html1)}\nhtml out:\n${normalise(html2)}`;
+        row.appendChild(detail);
+      }
+    } catch (error) {
+      failures += 1;
+      row = document.createElement("div");
+      row.className = "fail";
+      row.textContent = `FAIL  ${name}  threw: ${error && error.message}`;
+    }
+    results.appendChild(row);
+  }
+
+  scratch.innerHTML = "";
+  const summary = document.getElementById("summary");
+  summary.id = "summary";
+  summary.textContent =
+    `${FIXTURES.length - failures}/${FIXTURES.length} round trips stable` +
+    (failures ? "" : " :: ALL STABLE");
+})();
+</script>
+</body>
+</html>

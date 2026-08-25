@@ -64,6 +64,14 @@
 
   <section class="explain">
     <div>
+      <h2>HTML is allowed, safely</h2>
+      <p>
+        Markdown permits raw HTML, so <code>&lt;img src="assets/x.png" width="200"&gt;</code>
+        works and points at the embedded image. It is rebuilt against an allowlist first, so
+        a document cannot run script in your browser.
+      </p>
+    </div>
+    <div>
       <h2>Checksums are verified</h2>
       <p>
         Every embedded image carries a SHA-256 in the manifest. The viewer recomputes each one
@@ -115,6 +123,7 @@
 </footer>
 
 <script src="assets/rkf.js"></script>
+<script src="assets/sanitize.js"></script>
 <script src="assets/markdown.js"></script>
 <script src="assets/viewer.js"></script>
 </body>

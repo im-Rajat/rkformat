@@ -15,7 +15,7 @@ from pathlib import Path
 from . import __version__
 from .container import MANIFEST_MEMBER, RkDocument, is_rkf, markdown_ref
 from .errors import RkfError
-from .render import _human, to_html
+from .render import HTML_MODES, _human, to_html
 
 PROG = "rk"
 
@@ -34,6 +34,17 @@ def _err(message: str) -> None:
 def _load(path: str, *, strict: bool = False) -> RkDocument:
     """Open a document. Non-strict by default so `rk check` can diagnose broken files."""
     return RkDocument.open(path, strict=strict)
+
+
+def _html_mode(args: argparse.Namespace) -> str:
+    """Resolve the raw-HTML policy for a render.
+
+    `--allow-html` is kept as a deprecated alias for `--html raw` so an older installed
+    VS Code extension keeps working against a newer CLI.
+    """
+    if getattr(args, "allow_html", False):
+        return "raw"
+    return getattr(args, "html", "sanitize")
 
 
 def _resolve_out(explicit: str | None, source: Path, suffix: str) -> Path:
@@ -336,7 +347,7 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 def cmd_render(args: argparse.Namespace) -> int:
     doc = _load(args.file)
-    html_text = to_html(doc, allow_html=args.allow_html, show_meta=not args.no_meta)
+    html_text = to_html(doc, html=_html_mode(args), show_meta=not args.no_meta)
     if args.output == "-":
         sys.stdout.write(html_text)
         return 0
@@ -351,7 +362,7 @@ def cmd_render(args: argparse.Namespace) -> int:
 def cmd_view(args: argparse.Namespace) -> int:
     doc = _load(args.file)
     tmp = Path(tempfile.mkdtemp(prefix="rk-view-")) / (Path(args.file).stem + ".html")
-    tmp.write_text(to_html(doc, allow_html=args.allow_html), encoding="utf-8")
+    tmp.write_text(to_html(doc, html=_html_mode(args)), encoding="utf-8")
     _out(f"opening {tmp}")
     webbrowser.open(tmp.resolve().as_uri())
     return 0
@@ -365,7 +376,7 @@ def cmd_export_json(args: argparse.Namespace) -> int:
         "title": doc.title,
         "markdown": doc.markdown,
         "manifest": doc.manifest.to_json(),
-        "html": to_html(doc, standalone=False, allow_html=args.allow_html),
+        "html": to_html(doc, standalone=False, html=_html_mode(args)),
         "assets": [
             {
                 **asset.to_json(),
@@ -431,7 +442,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         )
     json.dump(
         {
-            "html": to_html(doc, standalone=False, allow_html=args.allow_html, show_meta=False),
+            "html": to_html(doc, standalone=False, html=_html_mode(args), show_meta=False),
             "assets": [a.to_json() for a in doc.assets],
             "problems": [
                 {"severity": p.severity, "message": p.message} for p in doc.validate()
@@ -451,6 +462,18 @@ def cmd_css(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------- parser
+
+
+def _add_html_flags(parser: argparse.ArgumentParser) -> None:
+    """Raw-HTML policy, shared by every command that renders."""
+    parser.add_argument(
+        "--html",
+        choices=HTML_MODES,
+        default="sanitize",
+        help="raw HTML in the body: sanitize against an allowlist (default), "
+        "escape to literal text, or pass through untouched",
+    )
+    parser.add_argument("--allow-html", action="store_true", help=argparse.SUPPRESS)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -535,23 +558,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("file")
     p.add_argument("-o", "--output", help="'-' for stdout")
     p.add_argument("--open", action="store_true", help="open the result in a browser")
-    p.add_argument("--allow-html", action="store_true", help="render raw HTML in the body (unsafe)")
+    _add_html_flags(p)
     p.add_argument("--no-meta", action="store_true")
 
     p = add("view", cmd_view, "Render to a temp file and open it in a browser.")
     p.add_argument("file")
-    p.add_argument("--allow-html", action="store_true")
+    _add_html_flags(p)
 
     p = add("export-json", cmd_export_json, "Dump the document as JSON (used by the VS Code editor).")
     p.add_argument("file")
-    p.add_argument("--allow-html", action="store_true")
+    _add_html_flags(p)
 
     p = add("import-json", cmd_import_json, "Apply a JSON edit from stdin and save.")
     p.add_argument("file")
 
     p = add("preview", cmd_preview, "Render candidate Markdown from stdin without saving.")
     p.add_argument("file")
-    p.add_argument("--allow-html", action="store_true")
+    _add_html_flags(p)
 
     p = add("css", cmd_css, "Print the shared document stylesheet.")
 

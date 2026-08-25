@@ -76,6 +76,8 @@
 
     render(text) {
       let out = this.codeSpans(text);
+      out = this.rawHtml(out);
+      out = this.entities(out);
       out = this.escapes(out);
       out = escapeHtml(out);
       out = this.imagesAndLinks(out);
@@ -94,6 +96,41 @@
         }
         return this.stash(`<code>${escapeHtml(content)}</code>`);
       });
+    }
+
+    /**
+     * Set aside inline HTML tags before the text gets escaped.
+     *
+     * They are re-inserted verbatim and the whole document is sanitised afterwards, which
+     * matches how the Python renderer works: markdown-it emits `<b>` and `</b>` as separate
+     * tokens, so they can only be cleaned as a pair once the document is assembled.
+     */
+    rawHtml(text) {
+      if (this.options.html === "escape") return text;
+      return text.replace(
+        /<!--[\s\S]*?-->|<\/?[A-Za-z][A-Za-z0-9:._-]*(?:\s[^<>]*?)?\/?>/g,
+        (tag) => this.stash(tag)
+      );
+    }
+
+    /**
+     * Resolve entity references, as CommonMark requires.
+     *
+     * `&lt;` must render as a literal `<`, and `&copy;` as (c) - not as the escaped text
+     * `&amp;lt;`. The decoded character is escaped once here and stashed, so the general
+     * escaping pass cannot double-escape it. An unrecognised name is left alone and ends up
+     * escaped, which is also what CommonMark says.
+     */
+    entities(text) {
+      const decode = global.RKF && global.RKF.decodeEntities;
+      if (!decode) return text;
+      return text.replace(
+        /&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});/g,
+        (reference) => {
+          const decoded = decode(reference);
+          return decoded === reference ? reference : this.stash(escapeHtml(decoded));
+        }
+      );
     }
 
     escapes(text) {
@@ -176,6 +213,9 @@
           attrs.push(`width="${resolved.width}" height="${resolved.height}"`);
         }
         attrs.push('class="rkf-image"');
+        // Keeps the original Markdown target recoverable from the rendered element.
+        attrs.push(`data-rkf-src="${escapeAttr(src)}"`);
+        attrs.push('data-rkf-md="1"');
       } else {
         const url = safeUrl(src);
         if (url === null) return null; // refused scheme: not an image at all
@@ -254,6 +294,22 @@
   const QUOTE = /^ {0,3}>[ \t]?/;
   const SETEXT = /^ {0,3}(=+|-+)[ \t]*$/;
   const DELIMITER_ROW = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
+
+  // CommonMark's HTML block tag list (type 6). These start a block that runs to the next
+  // blank line, whatever else is on the opening line.
+  const HTML_BLOCK_TAGS = new Set([
+    "address", "article", "aside", "base", "basefont", "blockquote", "body", "caption",
+    "center", "col", "colgroup", "dd", "details", "dialog", "dir", "div", "dl", "dt",
+    "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1", "h2",
+    "h3", "h4", "h5", "h6", "head", "header", "hr", "html", "iframe", "legend", "li",
+    "link", "main", "menu", "menuitem", "nav", "noframes", "ol", "optgroup", "option",
+    "p", "param", "search", "section", "summary", "table", "tbody", "td", "tfoot", "th",
+    "thead", "title", "tr", "track", "ul",
+  ]);
+  // Type 1: content is literal until the matching close tag.
+  const HTML_RAW_TAGS = new Set(["script", "pre", "style", "textarea"]);
+  const HTML_OPEN = /^ {0,3}<(\/?)([A-Za-z][A-Za-z0-9-]*)/;
+  const HTML_STANDALONE = /^ {0,3}<(?:\/?[A-Za-z][A-Za-z0-9:._-]*(?:\s[^<>]*?)?\/?|!--[\s\S]*?--|![A-Za-z][^>]*|\?[\s\S]*?\?)>[ \t]*$/;
 
   function startsBlock(line) {
     return (
@@ -358,6 +414,34 @@
           out.push(html);
           i = next;
           continue;
+        }
+
+        const htmlOpen = this.options.html !== "escape" ? HTML_OPEN.exec(line) : null;
+        if (htmlOpen) {
+          const tag = htmlOpen[2].toLowerCase();
+          const isBlock = HTML_BLOCK_TAGS.has(tag);
+          const isRaw = HTML_RAW_TAGS.has(tag);
+          if (isBlock || isRaw || HTML_STANDALONE.test(line)) {
+            const body = [];
+            if (isRaw) {
+              const closing = new RegExp(`</${tag}\\s*>`, "i");
+              while (i < lines.length) {
+                body.push(lines[i]);
+                if (closing.test(lines[i])) {
+                  i += 1;
+                  break;
+                }
+                i += 1;
+              }
+            } else {
+              while (i < lines.length && lines[i].trim()) {
+                body.push(lines[i]);
+                i += 1;
+              }
+            }
+            out.push(body.join("\n"));
+            continue;
+          }
         }
 
         if (line.includes("|") && i + 1 < lines.length && DELIMITER_ROW.test(lines[i + 1])) {
@@ -550,10 +634,22 @@
    * null to mark the reference dangling.
    */
   function render(markdown, options = {}) {
+    const mode = options.html || "sanitize";
     const normalised = String(markdown).replace(/\r\n?/g, "\n").replace(/\t/g, "    ");
     const { references, text } = extractReferences(normalised);
-    const blocks = new Blocks({ ...options, references });
-    return figurize(blocks.render(text.split("\n")));
+    const blocks = new Blocks({ ...options, html: mode, references });
+    let out = figurize(blocks.render(text.split("\n")));
+    if (mode === "sanitize") {
+      const sanitizer = global.RKF && global.RKF.sanitize;
+      if (!sanitizer) {
+        throw new Error("sanitize.js must be loaded before markdown.js to render HTML safely");
+      }
+      out = sanitizer(out, (src) => {
+        const resolved = options.resolveImage ? options.resolveImage(src) : null;
+        return resolved || null;
+      });
+    }
+    return out;
   }
 
   global.RKF = Object.assign(global.RKF || {}, {

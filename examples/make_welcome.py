@@ -90,7 +90,8 @@ file. Send it to someone and the pictures go with it. No `images/` folder, no br
   gets embedded in this file immediately.
 - **Drag a file in.** Drop a PNG or JPEG onto the editor.
 - **Click "Images"** in the toolbar to see everything embedded here, with sizes.
-- **Toggle Source / Split / Preview** to switch layouts.
+- **Toggle Live / Source / Split / Preview** to switch layouts. In **Live** you type
+  straight into this page, like a word processor.
 
 ## It is still just Markdown
 
@@ -113,6 +114,29 @@ Images are stored as raw bytes and never converted to text:
 ![Bar chart](assets/chart.png)
 
 ![Concentric rings](assets/rings.png)
+
+## Raw HTML works too
+
+Markdown allows raw HTML, and it points at the embedded images just like Markdown syntax
+does. This is the same picture as above, sized with an HTML attribute:
+
+<img src="assets/gradient.png" alt="drawing" width="200"/>
+
+<div align="center">
+
+Centred with <code>&lt;div align="center"&gt;</code>, holding <b>bold</b>, <i>italic</i>,
+<kbd>Ctrl</kbd>+<kbd>V</kbd>, H<sub>2</sub>O, x<sup>2</sup> and <mark>highlight</mark>.
+
+</div>
+
+<details><summary>A collapsible section</summary>
+
+Hidden until you click it.
+
+</details>
+
+A document from someone else cannot run script, though: `<script>`, `<iframe>`, `onerror=`
+and `javascript:` URLs are dropped before anything is rendered.
 
 ## From the command line
 

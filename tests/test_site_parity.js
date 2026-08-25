@@ -18,6 +18,7 @@ const { execFileSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 require(path.join(root, "docs/assets/rkf.js"));
+require(path.join(root, "docs/assets/sanitize.js"));
 require(path.join(root, "docs/assets/markdown.js"));
 
 const RK = (process.env.RK_COMMAND || "rk").split(" ");
@@ -108,6 +109,53 @@ const FIXTURES = [
   ["xss-raw-html", "<img src=x onerror=alert(1)>\n"],
   ["xss-data-html", "[b](data:text/html,evil)\n"],
   ["xss-reference", "[r][bad]\n\n[bad]: javascript:alert\n"],
+  // Raw HTML in the body: sanitised, not escaped (SPEC.md section 4).
+  ["html-img-sized", '<img src="assets/gradient.png" alt="drawing" width="200"/>\n'],
+  ["html-img-plain", '<img src="assets/chart.png">\n'],
+  ["html-img-dangling", '<img src="assets/nope.png" alt="x">\n'],
+  ["html-img-external", '<img src="https://example.com/a.png">\n'],
+  ["html-div-align", '<div align="center">centred <b>bold</b></div>\n'],
+  ["html-inline-mix", "Press <kbd>Ctrl</kbd>+<kbd>V</kbd> for <b>bold</b> and <i>italic</i>.\n"],
+  ["html-sub-sup", "H<sub>2</sub>O and x<sup>2</sup>\n"],
+  ["html-details", "<details><summary>More</summary>\n\nhidden text\n\n</details>\n"],
+  ["html-table", '<table><tr><th scope="col">h</th><td colspan="2">c</td></tr></table>\n'],
+  ["html-style-attr", '<span style="color:#f00;text-align:center">styled</span>\n'],
+  ["html-style-blocked", '<span style="background:url(http://evil/x)">bg</span>\n'],
+  ["html-anchor-blank", '<a href="https://example.com" target="_blank">out</a>\n'],
+  ["html-entities", "<p>&amp; &lt; &copy; &#39;</p>\n"],
+  ["html-in-list", "- item with <b>bold</b>\n- <img src=\"assets/chart.png\" width=\"50\">\n"],
+  ["html-in-quote", "> quoted <b>bold</b>\n"],
+  ["html-br", "line one<br>line two\n"],
+  ["html-comment", "before<!-- hidden -->after\n"],
+  ["html-unclosed", "<div>never closed\n"],
+  ["html-stray-close", "</div>stray\n"],
+  ["html-not-a-tag", "5 < 6 and a <notatag> here\n"],
+  ["html-in-code-fence", "```\n<script>alert(1)</script>\n```\n"],
+  ["html-in-code-span", "`<script>alert(1)</script>`\n"],
+  ["xss-html-script", "<script>alert(1)</script>visible\n"],
+  ["xss-html-onerror", "<img src=x onerror=alert(1)>\n"],
+  ["xss-html-iframe", '<iframe src="https://evil"></iframe>after\n'],
+  ["xss-html-svg", "<svg onload=alert(1)></svg>after\n"],
+  ["xss-html-base", '<base href="https://evil/">after\n'],
+  ["xss-html-form", '<form><input value="x"></form>after\n'],
+  ["xss-html-entity-scheme", '<a href="&#106;avascript:alert(1)">e</a>\n'],
+  ["xss-html-style-tag", "<style>body{display:none}</style>after\n"],
+  // CommonMark resolves entity references in text - this was a real divergence once.
+  ["entity-lt-gt", "Entity: &lt;tag&gt; here\n"],
+  ["entity-named", "Copyright &copy; 2026 and &hellip; and &mdash;\n"],
+  ["entity-amp", "Amp &amp; more\n"],
+  ["entity-numeric", "Numeric &#65; and hex &#x42;\n"],
+  ["entity-accented", "Caf&eacute; and &Uuml;ber\n"],
+  ["entity-unknown", "Not an entity &notreal; here\n"],
+  ["entity-bare-amp", "Bare & ampersand\n"],
+  ["entity-in-code", "`&lt;kept literal&gt;`\n"],
+  ["entity-in-heading", "# Heading with &amp; and &lt;\n"],
+  ["entity-in-link", "[&copy; text](https://example.com)\n"],
+  ["entity-in-alt", "![&copy; alt](assets/chart.png)\n"],
+  ["entity-in-table", "| &lt;a&gt; | &copy; |\n|---|---|\n| &amp; | x |\n"],
+  ["entity-in-title", '[x](https://e.com "&copy; title")\n'],
+  ["entity-in-img-title", '![a](assets/chart.png "&copy; t")\n'],
+  ["entity-html-block", '<div>&lt;shown as text&gt; &copy;</div>\n'],
   ["mixed", fs.readFileSync(path.join(root, "docs/fixtures/mixed.md"), "utf8")],
 ];
 

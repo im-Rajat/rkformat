@@ -82,11 +82,81 @@ body.rkf-editor {
   background: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
 }
 
+/* Layout switching. `hidden`-style rules are written per pane so the flex children keep
+   their sizing when shown again. */
+#live-pane { flex: 1 1 100%; height: 100%; overflow: auto; background: var(--rkf-desk, #f0f0f2); }
+
+#panes[data-layout="live"] #source-pane,
+#panes[data-layout="live"] #preview-pane,
+#panes[data-layout="live"] #divider { display: none; }
+
+#panes[data-layout="source"] #live-pane,
 #panes[data-layout="source"] #preview-pane,
 #panes[data-layout="source"] #divider { display: none; }
 
+#panes[data-layout="split"] #live-pane { display: none; }
+
+#panes[data-layout="preview"] #live-pane,
 #panes[data-layout="preview"] #source-pane,
 #panes[data-layout="preview"] #divider { display: none; }
+
+/* ------------------------------------------------------------ live (WYSIWYG) pane */
+
+#live {
+  max-width: 46rem;
+  margin: 1.5rem auto 6rem;
+  padding: 2.5rem 3rem 3rem;
+  min-height: 60vh;
+  outline: none;
+}
+
+#live:focus-visible { outline: none; }
+
+#live[contenteditable="true"]:empty::before {
+  content: "Start writing. Paste or drop an image to embed it in this file.";
+  color: var(--vscode-descriptionForeground, #888);
+}
+
+/* Make the structure legible while editing without changing the printed result. */
+#live table { table-layout: auto; }
+#live td:empty::after, #live th:empty::after { content: "\200b"; }
+#live img { cursor: default; }
+#live img:hover { outline: 2px solid var(--vscode-focusBorder, #0a84ff); outline-offset: 2px; }
+
+#format-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  overflow-x: auto;
+}
+
+#format-bar button {
+  min-width: 28px;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 0.88em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#format-bar button:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.25));
+}
+
+#format-bar .sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
 
 #source {
   flex: 1 1 auto;

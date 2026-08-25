@@ -221,11 +221,15 @@ class RkDocument:
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w") as zf:
             _write(zf, MIMETYPE_MEMBER, MIMETYPE.encode(), compress=False)
+            # The body goes second and uncompressed on purpose: it puts the prose in the
+            # clear near the start of the file, so `cat`, `less`, Notepad or a mail client
+            # preview shows readable text to someone with no .rkf tooling at all. Text is
+            # negligible next to the images, so the lost compression costs nothing.
+            _write(zf, self.manifest.content, self.markdown.encode("utf-8"), compress=False)
             manifest_json = json.dumps(
                 self.manifest.to_json(), indent=2, sort_keys=True, ensure_ascii=False
             ).encode("utf-8")
             _write(zf, MANIFEST_MEMBER, manifest_json)
-            _write(zf, self.manifest.content, self.markdown.encode("utf-8"))
             for asset in sorted(self.manifest.assets, key=lambda a: a.path):
                 _write(zf, asset.path, self._blobs[asset.path], media_type=asset.media_type)
             for name in sorted(self._extras):

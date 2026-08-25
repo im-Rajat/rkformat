@@ -8,13 +8,14 @@ an asset turns into a URL, which callers supply via `asset_url`.
 from __future__ import annotations
 
 import base64
-import html
 import re
+from html import escape, unescape
 from typing import Callable
 
 from .container import RkDocument
 from .errors import RkfError
 from .manifest import Asset
+from .sanitize import sanitize
 
 __all__ = ["to_html", "render_body", "PAGE_CSS"]
 
@@ -37,17 +38,32 @@ def data_uri(doc: RkDocument) -> AssetUrl:
     return resolve
 
 
+HTML_MODES = ("sanitize", "escape", "raw")
+
+
 def render_body(
     doc: RkDocument,
     *,
     asset_url: AssetUrl | None = None,
-    allow_html: bool = False,
+    html: str = "sanitize",
 ) -> str:
     """Render just the Markdown body to an HTML fragment.
 
-    Embedded raw HTML is disabled by default (SPEC.md section 4): a `.rkf` arrives from
-    someone else, and a document format should not be a script delivery mechanism.
+    `html` controls what happens to raw HTML in the document body:
+
+    * ``"sanitize"`` (default) - allowed through, rebuilt against the allowlist in
+      `rkformat.sanitize`. This is what makes ``<img src="assets/x.png" width="200">``
+      work without letting a document run script (SPEC.md section 4).
+    * ``"escape"`` - shown as literal text.
+    * ``"raw"`` - passed through untouched. Only for documents you wrote yourself.
+
+    Sanitising runs over the whole rendered fragment rather than per token, because
+    markdown-it emits ``<b>`` and ``</b>`` as separate inline tokens: cleaning those in
+    isolation would auto-close the first and discard the second. A single pass also means
+    our own generated markup is checked, which is a useful backstop.
     """
+    if html not in HTML_MODES:
+        raise RkfError(f"html must be one of {HTML_MODES}, not {html!r}")
     try:
         from markdown_it import MarkdownIt
     except ImportError as exc:  # pragma: no cover - depends on the environment
@@ -64,34 +80,54 @@ def render_body(
     # renderer (docs/assets/markdown.js), which cannot reuse this code on static hosting.
     # linkify also depends on the optional linkify-it-py package, so leaving it on would
     # make output depend on whether that happens to be installed.
-    md = MarkdownIt("commonmark", {"html": allow_html, "linkify": False, "typographer": False})
+    md = MarkdownIt("commonmark", {"html": html != "escape", "linkify": False, "typographer": False})
     md.enable(["table", "strikethrough"])
 
     def image_rule(self, tokens, idx, options, env):  # noqa: ANN001 - markdown-it hook
         token = tokens[idx]
         src = token.attrGet("src") or ""
         asset = doc.resolve(src)
-        alt = token.content or ""
-        attrs = [f'alt="{html.escape(alt, quote=True)}"']
+        # token.content is the raw label text, so entity references are still encoded.
+        # CommonMark treats alt as plain text with entities resolved, so decode before
+        # escaping - otherwise `![&copy; x]` would render the literal characters "&copy;".
+        alt = unescape(token.content or "")
+        attrs = [f'alt="{escape(alt, quote=True)}"']
         if asset is not None:
-            attrs.insert(0, f'src="{html.escape(resolve(asset), quote=True)}"')
+            attrs.insert(0, f'src="{escape(resolve(asset), quote=True)}"')
             if asset.width and asset.height:
                 # Reserve layout space so text does not reflow as images decode.
                 attrs.append(f'width="{asset.width}" height="{asset.height}"')
             attrs.append('class="rkf-image"')
+            # The rendered src is a data: or blob: URL. Keeping the original target lets a
+            # WYSIWYG editor turn the element back into `![alt](assets/x.png)`.
+            attrs.append(f'data-rkf-src="{escape(src, quote=True)}"')
+            # Distinguishes `![alt](x.png)` from an author-written <img>. A WYSIWYG editor
+            # needs this: the former serialises back to Markdown, the latter must be kept as
+            # HTML or attributes like width="200" would be silently dropped.
+            attrs.append('data-rkf-md="1"')
         else:
-            attrs.insert(0, f'src="{html.escape(src, quote=True)}"')
+            attrs.insert(0, f'src="{escape(src, quote=True)}"')
             attrs.append('class="rkf-image rkf-missing"')
             if not src.lower().startswith(("http://", "https://", "data:")):
-                attrs.append(f'data-rkf-dangling="{html.escape(src, quote=True)}"')
+                attrs.append(f'data-rkf-dangling="{escape(src, quote=True)}"')
         title = token.attrGet("title")
         if title:
-            attrs.append(f'title="{html.escape(title, quote=True)}"')
+            attrs.append(f'title="{escape(title, quote=True)}"')
         return f"<img {' '.join(attrs)} loading=\"lazy\">"
 
     md.add_render_rule("image", image_rule)
     body = md.render(doc.markdown)
+    if html == "sanitize":
+        body = sanitize(body, resolve_image=lambda src: _resolve_for_html(doc, src, resolve))
     return _figurize(body)
+
+
+def _resolve_for_html(doc: RkDocument, src: str, resolve: AssetUrl) -> dict[str, object] | None:
+    """Asset lookup for `<img>` tags written as raw HTML, matching Markdown images."""
+    asset = doc.resolve(src)
+    if asset is None:
+        return None
+    return {"url": resolve(asset), "width": asset.width, "height": asset.height}
 
 
 def _figurize(body: str) -> str:
@@ -206,23 +242,23 @@ def to_html(
     *,
     standalone: bool = True,
     asset_url: AssetUrl | None = None,
-    allow_html: bool = False,
+    html: str = "sanitize",
     show_meta: bool = True,
     extra_head: str = "",
 ) -> str:
     """Render a full HTML document. Self-contained by default (images as data URIs)."""
-    body = render_body(doc, asset_url=asset_url, allow_html=allow_html)
+    body = render_body(doc, asset_url=asset_url, html=html)
     if not standalone:
         return body
 
-    title = html.escape(doc.title)
+    title = escape(doc.title)
     meta = ""
     if show_meta:
         bits = [f"<span><strong>{title}</strong></span>"]
         if doc.manifest.authors:
-            bits.append("<span>" + html.escape(", ".join(doc.manifest.authors)) + "</span>")
+            bits.append("<span>" + escape(", ".join(doc.manifest.authors)) + "</span>")
         if doc.manifest.modified:
-            bits.append(f"<span>modified {html.escape(doc.manifest.modified)}</span>")
+            bits.append(f"<span>modified {escape(doc.manifest.modified)}</span>")
         bits.append(
             f"<span>{len(doc.manifest.assets)} embedded "
             f"image{'s' if len(doc.manifest.assets) != 1 else ''} "

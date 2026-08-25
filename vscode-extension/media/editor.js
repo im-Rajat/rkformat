@@ -11,6 +11,8 @@
   const vscode = acquireVsCodeApi();
 
   const source = document.getElementById("source");
+  const live = document.getElementById("live");
+  const formatBar = document.getElementById("format-bar");
   const preview = document.getElementById("preview");
   const panes = document.getElementById("panes");
   const status = document.getElementById("status");
@@ -24,13 +26,27 @@
   let lastRendered = -1;
   let assets = [];
   let syncing = false;
+  let liveTimer = null;
+  let latestHtml = "";
+  let liveDirty = false;
 
   // ------------------------------------------------------------------- layout
 
   function setLayout(name) {
+    const previous = panes.dataset.layout;
     panes.dataset.layout = name;
+    formatBar.hidden = name !== "live";
     for (const button of document.querySelectorAll("[data-layout]")) {
       button.classList.toggle("active", button.dataset.layout === name);
+    }
+    if (name === "live" && previous !== "live") {
+      // Entering live editing: fetch a fresh render of whatever the source currently says,
+      // so the editable page always starts from the canonical renderer's output.
+      refreshLive();
+    }
+    if (previous === "live" && name !== "live") {
+      // Leaving live editing: make sure the source reflects the last keystrokes.
+      serializeLive({ immediate: true });
     }
     try {
       vscode.setState(Object.assign({}, vscode.getState(), { layout: name }));
@@ -55,6 +71,185 @@
   });
 
   // -------------------------------------------------------------------- editing
+
+  // ---------------------------------------------------------------- live editing
+
+  /** Ask the host to render the current source, and load it into the editable page. */
+  function refreshLive() {
+    seq += 1;
+    setStatus("rendering\u2026");
+    vscode.postMessage({
+      type: "requestPreview",
+      markdown: source.value,
+      seq,
+      forLive: true,
+    });
+  }
+
+  /**
+   * Turn the edited page back into Markdown.
+   *
+   * The live pane is never re-rendered while typing - that would move the caret on every
+   * keystroke. Instead the DOM is serialised and the source textarea is updated, so
+   * switching modes is seamless in either direction.
+   */
+  function serializeLive(options = {}) {
+    if (liveTimer) {
+      clearTimeout(liveTimer);
+      liveTimer = null;
+    }
+    const run = () => {
+      if (!liveDirty) return;
+      liveDirty = false;
+      let markdown;
+      try {
+        markdown = RKF.toMarkdown(live);
+      } catch (err) {
+        setStatus("could not read the edited page");
+        return;
+      }
+      if (markdown === source.value) return;
+      source.value = markdown;
+      vscode.postMessage({ type: "change", markdown });
+    };
+    if (options.immediate) run();
+    else liveTimer = setTimeout(run, debounceMs);
+  }
+
+  live.addEventListener("input", () => {
+    liveDirty = true;
+    serializeLive();
+  });
+
+  live.addEventListener("blur", () => serializeLive({ immediate: true }));
+
+  // Paste as plain text: pasted rich HTML from elsewhere would drag in markup the format
+  // cannot express. Images are handled separately and do get embedded.
+  live.addEventListener("paste", (event) => {
+    const data = event.clipboardData;
+    if (!data) return;
+    const hasImage = Array.from(data.items || []).some(
+      (item) => item.kind === "file" && item.type.startsWith("image/")
+    );
+    if (hasImage) return; // the document-level handler embeds it
+    const text = data.getData("text/plain");
+    if (text === null || text === undefined) return;
+    event.preventDefault();
+    document.execCommand("insertText", false, text);
+  });
+
+  const FORMAT_BLOCKS = { h1: "H1", h2: "H2", h3: "H3", p: "P", quote: "BLOCKQUOTE", pre: "PRE" };
+
+  function applyFormat(action) {
+    live.focus();
+    switch (action) {
+      case "bold":
+      case "italic":
+        document.execCommand(action, false, null);
+        break;
+      case "strikethrough":
+        document.execCommand("strikeThrough", false, null);
+        break;
+      case "code":
+        wrapSelection("code");
+        break;
+      case "ul":
+        document.execCommand("insertUnorderedList", false, null);
+        break;
+      case "ol":
+        document.execCommand("insertOrderedList", false, null);
+        break;
+      case "hr":
+        document.execCommand("insertHTML", false, "<hr>");
+        break;
+      case "table":
+        document.execCommand(
+          "insertHTML",
+          false,
+          "<table><thead><tr><th>Column</th><th>Column</th><th>Column</th></tr></thead>" +
+            "<tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>"
+        );
+        break;
+      case "link": {
+        const url = window.prompt("Link URL");
+        if (url) document.execCommand("createLink", false, url);
+        break;
+      }
+      default:
+        if (FORMAT_BLOCKS[action]) {
+          document.execCommand("formatBlock", false, FORMAT_BLOCKS[action]);
+        }
+    }
+    liveDirty = true;
+    serializeLive({ immediate: true });
+  }
+
+  /** Wrap the selection in an element, for formats execCommand has no verb for. */
+  function wrapSelection(tagName) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (range.collapsed) return;
+    const wrapper = document.createElement(tagName);
+    try {
+      wrapper.appendChild(range.extractContents());
+      range.insertNode(wrapper);
+      selection.removeAllRanges();
+      const after = document.createRange();
+      after.selectNodeContents(wrapper);
+      selection.addRange(after);
+    } catch (err) {
+      /* selection spanned incompatible blocks; leave it alone */
+    }
+  }
+
+  for (const button of formatBar.querySelectorAll("[data-format]")) {
+    // mousedown, so the selection in the editable region is still live.
+    button.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      applyFormat(button.dataset.format);
+    });
+  }
+
+  live.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    const key = event.key.toLowerCase();
+    if (key === "b" || key === "i") {
+      event.preventDefault();
+      applyFormat(key === "b" ? "bold" : "italic");
+    } else if (key === "k") {
+      event.preventDefault();
+      applyFormat("link");
+    }
+  });
+
+  /** Insert an embedded image at the caret, as a real element. */
+  function insertImageElement(asset) {
+    const img = document.createElement("img");
+    img.src = asset.data_uri || "";
+    img.alt = asset.alt || "";
+    img.className = "rkf-image";
+    img.setAttribute("data-rkf-src", asset.path);
+    img.setAttribute("data-rkf-md", "1");
+    if (asset.width && asset.height) {
+      img.width = asset.width;
+      img.height = asset.height;
+    }
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount && live.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(img);
+      range.setStartAfter(img);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      live.appendChild(img);
+    }
+    liveDirty = true;
+    serializeLive({ immediate: true });
+  }
 
   function schedulePreview() {
     if (previewTimer) clearTimeout(previewTimer);
@@ -246,7 +441,10 @@
     switch (message.type) {
       case "init":
         source.value = message.markdown;
-        preview.innerHTML = message.html || "";
+        latestHtml = message.html || "";
+        preview.innerHTML = latestHtml;
+        live.innerHTML = latestHtml;
+        liveDirty = false;
         debounceMs = typeof message.debounceMs === "number" ? message.debounceMs : 250;
         renderAssets(message.assets);
         renderProblems(message.problems);
@@ -257,7 +455,14 @@
       case "preview":
         if (message.seq < lastRendered) break; // a newer render already landed
         lastRendered = message.seq;
+        latestHtml = message.html;
         preview.innerHTML = message.html;
+        // Only load the editable page on an explicit request: replacing its content while
+        // someone is typing would throw the caret to the top of the document.
+        if (message.forLive) {
+          live.innerHTML = message.html;
+          liveDirty = false;
+        }
         renderProblems(message.problems);
         if (message.assets) renderAssets(mergeThumbnails(message.assets));
         setStatus("");
@@ -271,8 +476,22 @@
 
       case "insert":
         if (message.assets) renderAssets(message.assets);
-        if (message.text) insertAtCursor(message.text);
+        if (panes.dataset.layout === "live") {
+          // In live editing the caret is in the page, so insert the picture itself rather
+          // than Markdown text the user would see as source.
+          const added = (message.assets || []).filter((asset) =>
+            (message.text || "").includes(asset.path)
+          );
+          if (added.length) added.forEach(insertImageElement);
+          else refreshLive();
+        } else if (message.text) {
+          insertAtCursor(message.text);
+        }
         setStatus("");
+        break;
+
+      case "setLayout":
+        setLayout(message.layout);
         break;
 
       case "pickImage":
