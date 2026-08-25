@@ -206,7 +206,46 @@ window.addEventListener("load", () => {
                   source.value.includes("Typed live.") && source.value.includes("assets/gradient.png"),
                   source.value
                 );
-                report();
+
+                // 8. Undo: the host pushes a previous body back with a `restore`.
+                const changesBefore = posted.filter((m) => m.type === "change").length;
+                const restored = "# Title\\n\\nRestored by undo.\\n";
+                source.focus();
+                window.postMessage({ type: "restore", markdown: restored }, "*");
+
+                setTimeout(() => {
+                  check("restore replaced the body", source.value === restored, source.value);
+                  check(
+                    "restore did not post a change (no edit loop)",
+                    posted.filter((m) => m.type === "change").length === changesBefore,
+                    posted.filter((m) => m.type === "change").length - changesBefore
+                  );
+                  check(
+                    "caret parked at the first difference",
+                    source.selectionStart === "# Title\\n\\n".length,
+                    source.selectionStart
+                  );
+
+                  // 9. A restore while in live mode must re-render the page.
+                  document.querySelector('[data-layout="live"]').click();
+                  setTimeout(() => {
+                    const second = "# Title\\n\\nSecond undo step.\\n";
+                    window.postMessage({ type: "restore", markdown: second }, "*");
+                    setTimeout(() => {
+                      check(
+                        "restore in live mode re-rendered the page",
+                        live.textContent.includes("Second undo step."),
+                        live.textContent
+                      );
+                      check(
+                        "live restore did not post a change either",
+                        posted.filter((m) => m.type === "change").length === changesBefore,
+                        posted.filter((m) => m.type === "change").length - changesBefore
+                      );
+                      report();
+                    }, 120);
+                  }, 60);
+                }, 60);
               }, 40);
             }, 60);
           }, 60);

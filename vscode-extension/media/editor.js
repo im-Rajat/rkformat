@@ -110,7 +110,7 @@
       }
       if (markdown === source.value) return;
       source.value = markdown;
-      vscode.postMessage({ type: "change", markdown });
+      vscode.postMessage({ type: "change", markdown, label: "Edit page" });
     };
     if (options.immediate) run();
     else liveTimer = setTimeout(run, debounceMs);
@@ -251,6 +251,39 @@
     serializeLive({ immediate: true });
   }
 
+  /**
+   * Apply a body the host handed back (undo/redo), without reporting it as an edit.
+   *
+   * The caret is parked at the first character that differs, which is where the change the
+   * user just reversed actually was - better than snapping to the top of the document.
+   */
+  function restoreBody(markdown) {
+    const previous = source.value;
+    let common = 0;
+    while (
+      common < previous.length &&
+      common < markdown.length &&
+      previous[common] === markdown[common]
+    ) {
+      common += 1;
+    }
+    source.value = markdown;
+    if (document.activeElement === source) {
+      const caret = Math.min(common, markdown.length);
+      try {
+        source.setSelectionRange(caret, caret);
+      } catch (err) {
+        /* not focusable right now; harmless */
+      }
+    }
+    if (panes.dataset.layout === "live") {
+      // The editable page has to be re-rendered from the restored source.
+      refreshLive();
+    } else {
+      schedulePreview();
+    }
+  }
+
   function schedulePreview() {
     if (previewTimer) clearTimeout(previewTimer);
     previewTimer = setTimeout(requestPreview, debounceMs);
@@ -263,7 +296,7 @@
   }
 
   source.addEventListener("input", () => {
-    vscode.postMessage({ type: "change", markdown: source.value });
+    vscode.postMessage({ type: "change", markdown: source.value, label: "Typing" });
     schedulePreview();
   });
 
@@ -291,7 +324,7 @@
     const caret = start + payload.length;
     source.setSelectionRange(caret, caret);
     source.focus();
-    vscode.postMessage({ type: "change", markdown: source.value });
+    vscode.postMessage({ type: "change", markdown: source.value, label: "Insert" });
     requestPreview();
   }
 
@@ -492,6 +525,12 @@
 
       case "setLayout":
         setLayout(message.layout);
+        break;
+
+      case "restore":
+        // Undo or redo happened on the host side. Put the body back without posting a
+        // change, or the restored state would be recorded as a new edit.
+        restoreBody(message.markdown);
         break;
 
       case "pickImage":

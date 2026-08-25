@@ -245,6 +245,7 @@ pytest                           # the format library - or, with no pytest insta
 python3 tests/test_rkformat.py
 
 node tests/test_site_parity.js   # browser renderer vs. `rk render`, 102 fixtures
+node tests/test_extension_undo.js  # the extension's undo/redo stack, against a vscode stub
 tests/test_site_browser.sh       # headless Chrome: the viewer, the WYSIWYG round trip,
                                  # and live editing driven through the real webview shell
 ```

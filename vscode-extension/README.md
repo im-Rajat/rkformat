@@ -33,7 +33,7 @@ Opens `.rkf` and `.rk` files as a real editor instead of a binary blob, in four 
 Live editing turns the edited page back into Markdown on every keystroke. That direction is
 lossy by nature, so the rule is: emit Markdown where Markdown can express something exactly,
 and keep verbatim HTML where it cannot — your `<img width="200">` survives a round trip
-instead of being flattened to `![](...)`.
+instead of being flattened to plain Markdown image syntax.
 
 Source stays canonical. If Live mode ever does something you did not intend, switch to Source
 and the Markdown is right there. `tests/test_site_browser.sh` checks that
@@ -94,6 +94,17 @@ To develop against it instead, open `vscode-extension/` in VS Code and press F5.
 | `rkformat.defaultLayout` | `"split"` | `live`, `split`, `preview`, or `source`. |
 | `rkformat.html` | `"sanitize"` | Raw HTML handling: `sanitize` (allowlist), `escape` (show as text), `raw` (untouched). |
 | `rkformat.previewDebounceMs` | `250` | Idle time before the preview re-renders. |
+
+## Undo and redo
+
+Ctrl+Z and Ctrl+Shift+Z (or Ctrl+Y) go through VS Code's own undo stack, so they work in
+every mode and interact correctly with the dirty indicator and Save.
+
+Granularity differs by mode, which is worth knowing: **Source** records an entry per
+keystroke, so undo is character-by-character. **Live** records one per editing burst
+(`rkformat.previewDebounceMs`, 250ms by default), because the page has to be converted back
+to Markdown before there is anything to record - so one undo may step back a few characters
+at once.
 
 ## Notes on behaviour
 

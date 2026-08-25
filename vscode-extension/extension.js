@@ -168,7 +168,8 @@ class RkfEditorProvider {
     const snapshot = await rkJson(["export-json", source.fsPath, "--html", htmlMode()]);
     const document = new RkfDocument(uri, snapshot);
     if (openContext.backupId) {
-      // Restoring after a crash: the backup holds the unsaved body.
+      // Restoring after a crash: the backup holds the unsaved body. There is no prior state
+      // to undo to, so this stays a plain content-change notification.
       document.savedMarkdown = null;
       this._onDidChangeCustomDocument.fire({ document });
     }
@@ -304,8 +305,7 @@ class RkfEditorProvider {
         return;
 
       case "change":
-        document.markdown = message.markdown;
-        this._onDidChangeCustomDocument.fire({ document });
+        this.applyEdit(document, message.markdown, message.label);
         return;
 
       case "requestPreview": {
@@ -375,6 +375,33 @@ class RkfEditorProvider {
         await vscode.commands.executeCommand("workbench.action.files.save");
         return;
     }
+  }
+
+  /**
+   * Record a body change as an undoable edit.
+   *
+   * Reporting `{document}` alone tells VS Code "the content changed but cannot be undone":
+   * it marks the file dirty and *disables* undo, while still capturing Ctrl+Z, so the
+   * keystroke did nothing at all. Supplying undo/redo hands VS Code a real edit stack, so
+   * Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y all work and the dirty indicator follows the stack.
+   */
+  applyEdit(document, markdown, label) {
+    const before = document.markdown;
+    const after = String(markdown);
+    if (before === after) return;
+    document.markdown = after;
+    this._onDidChangeCustomDocument.fire({
+      document,
+      label: label || "Edit",
+      undo: () => this.restore(document, before),
+      redo: () => this.restore(document, after),
+    });
+  }
+
+  /** Put a previous body back and tell every open view about it. */
+  restore(document, markdown) {
+    document.markdown = markdown;
+    this.post(document, { type: "restore", markdown });
   }
 
   /**

@@ -2,9 +2,17 @@
   "name": "rkformat",
   "displayName": "RK Document (.rkf)",
   "description": "View and edit .rkf compound documents - Markdown with its images embedded in a single file. Live WYSIWYG editing, split preview, and paste-to-embed.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "rkformat",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/im-Rajat/rkformat.git"
+  },
+  "homepage": "https://github.com/im-Rajat/rkformat#readme",
+  "bugs": {
+    "url": "https://github.com/im-Rajat/rkformat/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
