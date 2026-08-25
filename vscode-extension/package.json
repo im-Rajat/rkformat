@@ -2,7 +2,7 @@
   "name": "rkformat",
   "displayName": "RK Document (.rkf)",
   "description": "View and edit .rkf compound documents - Markdown with its images embedded in a single file. Live WYSIWYG editing, split preview, and paste-to-embed.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "rkformat",
   "license": "MIT",
   "repository": {

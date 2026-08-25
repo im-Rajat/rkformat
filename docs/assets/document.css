@@ -29,11 +29,13 @@ body {
   margin: 0;
   background: var(--rkf-desk);
   color: var(--rkf-ink);
-  font: 16px/1.7 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
   -webkit-font-smoothing: antialiased;
 }
 .rkf-page {
-  max-width: 46rem;
+  max-width: 46em;
   margin: 2.5rem auto;
   padding: 4rem 4.5rem 5rem;
   background: var(--rkf-page);
@@ -45,9 +47,9 @@ body {
   .rkf-page { margin: 0; padding: 1.5rem 1.25rem 3rem; border: 0; border-radius: 0; box-shadow: none; }
 }
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 2em 0 .6em; font-weight: 650; }
-h1 { font-size: 2rem; margin-top: 0; letter-spacing: -.015em; }
-h2 { font-size: 1.5rem; padding-bottom: .3em; border-bottom: 1px solid var(--rkf-rule); }
-h3 { font-size: 1.2rem; }
+h1 { font-size: 2em; margin-top: 0; letter-spacing: -.015em; }
+h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid var(--rkf-rule); }
+h3 { font-size: 1.2em; }
 p, ul, ol, blockquote, table, pre, figure { margin: 0 0 1.1em; }
 a { color: var(--rkf-accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
 blockquote {
@@ -76,7 +78,7 @@ li.rkf-task input[type="checkbox"] {
   accent-color: var(--rkf-accent);
 }
 figure { margin: 1.8em 0; text-align: center; }
-figcaption { margin-top: .6em; font-size: .85rem; color: var(--rkf-muted); font-style: italic; }
+figcaption { margin-top: .6em; font-size: .85em; color: var(--rkf-muted); font-style: italic; }
 .rkf-image {
   max-width: 100%;
   height: auto;
@@ -85,12 +87,12 @@ figcaption { margin-top: .6em; font-size: .85rem; color: var(--rkf-muted); font-
 }
 .rkf-missing {
   display: inline-block;
-  min-width: 12rem;
-  min-height: 3rem;
+  min-width: 12em;
+  min-height: 3em;
   padding: .8em 1em;
   border: 1px dashed #c94a4a;
   color: #c94a4a;
-  font-size: .85rem;
+  font-size: .85em;
 }
 .rkf-meta {
   max-width: 46rem;

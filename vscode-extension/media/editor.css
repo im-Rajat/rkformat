@@ -216,6 +216,14 @@ body[data-width="page"] #preview {
   body[data-width="page"] #preview { margin: 0; padding: 1.25rem 1.25rem 3rem; }
 }
 
+/* The rendered document is set a little smaller than a standalone page: beside the editor's
+   13px monospace source, 16px body text reads as a size mismatch. document.css puts its
+   typographic sizes in em, so this scales headings and captions with it. */
+/* Set on the container, not as a variable: document.css applies its body size to the
+   `body` element, and a custom property set here could not reach upward to it. The
+   headings and captions in document.css are in em, so they scale with this. */
+#live, #preview { font-size: 14px; }
+
 #live { min-height: 60vh; outline: none; }
 #live:focus-visible { outline: none; }
 
