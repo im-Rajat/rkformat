@@ -8,9 +8,9 @@
  *
  * The output follows SPEC.md deliberately, not incidentally:
  *
- *   section 2    member order - mimetype, content.md, manifest.json, assets, extras
+ *   section 2    member order - mimetype, the note, content.md, manifest.json, assets, extras
  *   section 2.1  mimetype first and STORED, so magic-byte detection works
- *   section 5    compression policy - the body STORED for plain-text legibility, and
+ *   section 5    compression policy - note, body and manifest STORED for legibility, and
  *                already-compressed image formats STORED rather than pointlessly deflated
  *   section 6    fixed timestamps and sorted keys, so identical content gives identical bytes
  *
@@ -24,6 +24,17 @@
   const MIMETYPE = "application/vnd.rkformat+zip";
   const MIMETYPE_MEMBER = "mimetype";
   const MANIFEST_MEMBER = "manifest.json";
+  const NOTE_MEMBER = "HOW-TO-READ-THIS.txt";
+
+  // Byte-identical to NOTE_TEXT in src/rkformat/container.py - the two implementations must
+  // produce the same archive, and tests/test_web_write.js compares them.
+  const NOTE_TEXT =
+    "This is a .rkf document: Markdown text with its images packed into the same file.\n" +
+    "\n" +
+    "The document text follows below - just scroll past this. The noise at the end of the\n" +
+    "file is the images, stored as binary data.\n" +
+    "\n" +
+    "To read it with the pictures: https://im-rajat.github.io/rkformat/\n";
 
   // SPEC.md section 5: deflating these returns under 1%, so it is pure cost.
   const INCOMPRESSIBLE = new Set([
@@ -267,10 +278,12 @@
     const contentName = manifest.content;
     const members = [
       { name: MIMETYPE_MEMBER, data: encoder.encode(MIMETYPE), compress: false },
-      // The body goes second and uncompressed so the prose is legible in a plain text
-      // editor (SPEC.md section 2, design goal 4).
+      // The note, the body and the manifest are all uncompressed so that everything a plain
+      // text editor shows before the first image is readable (SPEC.md section 2, design
+      // goal 4): what the file is, then the prose, then the image list as JSON.
+      { name: NOTE_MEMBER, data: encoder.encode(NOTE_TEXT), compress: false },
       { name: contentName, data: encoder.encode(doc.markdown), compress: false },
-      { name: MANIFEST_MEMBER, data: encoder.encode(stableJson(manifest)) },
+      { name: MANIFEST_MEMBER, data: encoder.encode(stableJson(manifest)), compress: false },
     ];
 
     for (const asset of manifest.assets) {

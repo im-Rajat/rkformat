@@ -19,7 +19,7 @@
 
 "use strict";
 
-const CACHE = "rkf-shell-0316fd253ce9";
+const CACHE = "rkf-shell-3728e3daa74e";
 
 // Relative so this works from a project page such as /rkformat/ as well as a root domain.
 const SHELL = [

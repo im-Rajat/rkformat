@@ -26,19 +26,21 @@ alias. Media type: `application/vnd.rkformat+zip`.
 ```
 document.rkf
 ├── mimetype              # FIRST entry, STORED (uncompressed), no extra field
-├── content.md            # SECOND entry, STORED — CommonMark body, the text payload
-├── manifest.json         # document metadata + asset table
+├── HOW-TO-READ-THIS.txt  # STORED — a short note for whoever opens this in a text editor
+├── content.md            # STORED — CommonMark body, the text payload
+├── manifest.json         # STORED — document metadata + asset table
 ├── assets/               # binary payloads
 │   ├── diagram.png
 │   └── photo.jpg
 └── meta/                 # OPTIONAL free-form sidecar data
 ```
 
-Writers **should** emit members in that order, and **should** store the body uncompressed.
-That is what makes design goal 4 hold: the prose lands within the first few hundred bytes
-of the file, in the clear, so a plain text editor shows something readable. It costs a
-little size on the text, which is negligible beside the images. Readers **must not** rely
-on the ordering — a conforming document may list members in any order.
+Writers **should** emit members in that order, and **should** store everything before the
+first asset uncompressed. That is what makes design goal 4 hold: opening the file in a plain
+text editor shows a line saying what it is, then the whole document, then the asset table as
+legible JSON, before any binary begins. It costs a little size on the text and metadata,
+which is negligible beside the images. Readers **must not** rely on the ordering — a
+conforming document may list members in any order.
 
 ### 2.1 `mimetype`
 
@@ -54,6 +56,20 @@ bytes 0..3   == "PK\x03\x04"
 bytes 30..37 == "mimetype"
 bytes 38..   startswith "application/vnd.rkformat+zip"
 ```
+
+### 2.1a `HOW-TO-READ-THIS.txt`
+
+OPTIONAL, and generated rather than authored. A recipient who has no `.rkf` tooling and
+opens the file in a text editor sees ZIP header bytes first, which reads as corruption.
+A short uncompressed note placed before the body says what the file is, that the document
+text follows, and where to view it with images.
+
+Writers that emit it **must** treat it as container furniture: regenerate it on every write,
+and never surface it as document content (it is not unpacked as a file, not listed as an
+asset, and not carried over from the document being read — otherwise a second copy would be
+written alongside the fresh one). Readers **must** ignore it. It **should** stay short: it
+sits between the ZIP header and the prose, so a long note pushes the document itself off a
+text editor's first screen.
 
 ### 2.2 `manifest.json`
 
@@ -174,7 +190,12 @@ Writers choose per member:
 - `mimetype` is always **stored** (required by section 2.1).
 - The content file is **stored**, so the body is readable without decompression
   (section 2, design goal 4).
-- `manifest.json` is **deflated**.
+- The text-editor note, if present, is **stored** — a compressed note nobody can read
+  would defeat its only purpose (section 2.1a).
+- `manifest.json` is **stored**. It sits between the body and the first asset, so
+  deflating it would drop a block of binary into the middle of the part of the file that
+  design goal 4 promises is readable. A few hundred bytes against images measured in
+  megabytes.
 - Assets whose media type is already entropy-coded — `image/jpeg`, `image/webp`,
   `image/avif`, `image/heic`, `image/gif` — are **stored**. Deflating them costs CPU on
   every save and returns under 1%.

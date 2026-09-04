@@ -40,7 +40,23 @@ __all__ = ["RkDocument", "is_rkf", "Reference"]
 
 MIMETYPE_MEMBER = "mimetype"
 MANIFEST_MEMBER = "manifest.json"
+NOTE_MEMBER = "HOW-TO-READ-THIS.txt"
 RKF_SUFFIXES = (".rkf", ".rk")
+
+# Written second, uncompressed, so it is the first prose a text editor shows. Someone who is
+# sent a .rkf and opens it in Notepad sees ZIP header bytes and then this, before the
+# document - which turns "what is this broken file" into "oh, scroll down". Kept to a few
+# short lines: it is furniture, and the document itself should start on the first screen.
+# Regenerated on every write and never round-tripped, so it cannot go stale or be edited into
+# something misleading.
+NOTE_TEXT = """\
+This is a .rkf document: Markdown text with its images packed into the same file.
+
+The document text follows below - just scroll past this. The noise at the end of the
+file is the images, stored as binary data.
+
+To read it with the pictures: https://im-rajat.github.io/rkformat/
+"""
 
 # SPEC.md section 4 hardening ceilings.
 MAX_TOTAL_UNCOMPRESSED = 512 * 1024 * 1024
@@ -190,7 +206,10 @@ class RkDocument:
                 )
             markdown = _read_member(zf, manifest.content, origin).decode("utf-8")
 
-            known = {MIMETYPE_MEMBER, MANIFEST_MEMBER, manifest.content}
+            # NOTE_MEMBER is container furniture, not content: excluded so it is neither
+            # unpacked as a document file nor carried in extras, where it would be written a
+            # second time alongside the freshly generated one.
+            known = {MIMETYPE_MEMBER, MANIFEST_MEMBER, NOTE_MEMBER, manifest.content}
             blobs: dict[str, bytes] = {}
             extras: dict[str, bytes] = {}
             corrupt: list[str] = []
@@ -235,7 +254,8 @@ class RkDocument:
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w") as zf:
             _write(zf, MIMETYPE_MEMBER, MIMETYPE.encode(), compress=False)
-            # The body goes second and uncompressed on purpose: it puts the prose in the
+            _write(zf, NOTE_MEMBER, NOTE_TEXT.encode("utf-8"), compress=False)
+            # The body goes early and uncompressed on purpose: it puts the prose in the
             # clear near the start of the file, so `cat`, `less`, Notepad or a mail client
             # preview shows readable text to someone with no .rkf tooling at all. Text is
             # negligible next to the images, so the lost compression costs nothing.
@@ -243,7 +263,11 @@ class RkDocument:
             manifest_json = json.dumps(
                 self.manifest.to_json(), indent=2, sort_keys=True, ensure_ascii=False
             ).encode("utf-8")
-            _write(zf, MANIFEST_MEMBER, manifest_json)
+            # Uncompressed too, for the same reason: it is the last thing before the binary
+            # images, so leaving it in the clear means everything a text editor shows up to
+            # the first image is readable - prose, then the image list as plain JSON. It is a
+            # few hundred bytes against images measured in megabytes.
+            _write(zf, MANIFEST_MEMBER, manifest_json, compress=False)
             for asset in sorted(self.manifest.assets, key=lambda a: a.path):
                 _write(zf, asset.path, self._blobs[asset.path], media_type=asset.media_type)
             for name in sorted(self._extras):

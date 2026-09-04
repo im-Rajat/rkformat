@@ -19,7 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixtures
 
 from rkformat import MIMETYPE, Asset, Manifest, RkDocument, is_rkf
-from rkformat.container import MANIFEST_MEMBER, MIMETYPE_MEMBER, markdown_ref
+from rkformat.container import (
+    MANIFEST_MEMBER,
+    MIMETYPE_MEMBER,
+    NOTE_MEMBER,
+    markdown_ref,
+)
 from rkformat.errors import (
     RkfError,
     RkfFormatError,
@@ -96,8 +101,12 @@ def test_mimetype_member_is_first_and_uncompressed(tmp_path):
         infos = zf.infolist()
     assert infos[0].filename == MIMETYPE_MEMBER
     assert infos[0].compress_type == zipfile.ZIP_STORED
-    assert infos[1].filename == "content.md"
-    assert infos[2].filename == MANIFEST_MEMBER
+    assert infos[1].filename == NOTE_MEMBER
+    assert infos[2].filename == "content.md"
+    assert infos[3].filename == MANIFEST_MEMBER
+    # Everything before the first image is readable text, so a text editor shows prose
+    # rather than mojibake until the binary payloads begin.
+    assert all(i.compress_type == zipfile.ZIP_STORED for i in infos[:4])
 
 
 def test_body_is_readable_in_a_plain_text_editor(tmp_path):
@@ -112,10 +121,74 @@ def test_body_is_readable_in_a_plain_text_editor(tmp_path):
     raw = doc.save(tmp_path / "s.rkf").read_bytes()
 
     assert b"A distinctive sentence in the body." in raw
-    # ...and near the front, not buried behind the image payloads.
+    # ...and near the front, not buried behind the image payloads. The budget also caps how
+    # long the explanatory note may grow: it sits between the ZIP header and the prose, so
+    # padding it would push the document itself off a text editor's first screen.
     assert raw.index(b"A distinctive sentence") < 512
     with zipfile.ZipFile(tmp_path / "s.rkf") as zf:
         assert zf.getinfo("content.md").compress_type == zipfile.ZIP_STORED
+
+
+def test_note_orients_a_reader_who_opens_the_file_in_a_text_editor(tmp_path):
+    """A recipient with no tooling should learn what the file is before reading it.
+
+    Opening a .rkf in Notepad shows ZIP header bytes first, which looks like corruption.
+    A short uncompressed note placed before the body says what the file is and where to
+    view it with images.
+    """
+    path = sample().save(tmp_path / "s.rkf")
+    raw = path.read_bytes()
+
+    assert b"This is a .rkf document" in raw
+    assert raw.index(b"This is a .rkf document") < 200, "the note must be on the first screen"
+    assert b"im-rajat.github.io/rkformat" in raw, "and must say where to view it properly"
+    with zipfile.ZipFile(path) as zf:
+        assert zf.getinfo(NOTE_MEMBER).compress_type == zipfile.ZIP_STORED
+    # It precedes the prose, which is the whole point of it.
+    assert raw.index(b"This is a .rkf document") < raw.index(b"# Sample")
+
+
+def test_note_is_regenerated_rather_than_carried(tmp_path):
+    """Re-saving must not accumulate copies of the note, or edit a stale one back in.
+
+    The note is container furniture, so the reader has to treat it as known: were it taken
+    for an author's file it would land in extras and be written a second time next to the
+    freshly generated one, giving a ZIP with two members of the same name.
+    """
+    first = sample().save(tmp_path / "s.rkf")
+    doc = RkDocument.open(first)
+    assert NOTE_MEMBER not in doc._extras, "the note must not be mistaken for author content"
+    second = doc.save(tmp_path / "again.rkf")
+
+    with zipfile.ZipFile(second) as zf:
+        names = zf.namelist()
+    assert names.count(NOTE_MEMBER) == 1, names
+
+    # A tampered note is replaced, not preserved: it is generated, so it cannot go stale.
+    original = first.read_bytes()
+    # Same length, so the ZIP's offsets stay valid and the file still opens - the point is
+    # that the content is replaced, not that a mangled archive is rejected.
+    tampered = original.replace(b"This is a .rkf document", b"This is a XXXX document")
+    (tmp_path / "t.rkf").write_bytes(tampered)
+    resaved = RkDocument.open(tmp_path / "t.rkf").save(tmp_path / "fixed.rkf").read_bytes()
+    assert b"This is a XXXX document" not in resaved
+    assert b"This is a .rkf document" in resaved
+
+
+def test_note_is_not_unpacked_as_a_document_file(tmp_path):
+    """`rk unpack` yields a plain Markdown folder; the note is not part of the document."""
+    root = sample().unpack(tmp_path / "out")
+    assert not (root / NOTE_MEMBER).exists(), sorted(p.name for p in root.iterdir())
+
+
+def test_manifest_is_stored_so_it_reads_as_json(tmp_path):
+    """The manifest sits between the prose and the images, so deflating it would put a
+    block of mojibake in the middle of the readable part of the file."""
+    path = sample().save(tmp_path / "s.rkf")
+    with zipfile.ZipFile(path) as zf:
+        assert zf.getinfo(MANIFEST_MEMBER).compress_type == zipfile.ZIP_STORED
+    raw = path.read_bytes()
+    assert b'"assets"' in raw, "the image list should be legible JSON in the raw bytes"
 
 
 def test_unpacked_folder_is_plain_markdown(tmp_path):

@@ -253,6 +253,53 @@ function writeFile(name, bytes) {
     check("and it is still there after saving", listing.includes("meta/future.json"), listing.trim());
   }
 
+  console.log("--- the text-editor note is generated, not carried ---");
+  {
+    // The note exists for someone who opens a .rkf in Notepad, so it must be written every
+    // time and never treated as author content. If the reader mistook it for an unknown
+    // member it would be kept in extras and written a second time next to the fresh one,
+    // producing an archive with two members of the same name - which no error would report.
+    const doc = RKF.create({ title: "Note" });
+    doc.markdown = "# Note\n\nBody text.\n";
+    const first = writeFile("note.rkf", await RKF.serialize(doc));
+
+    const reloaded = await RKF.open(
+      (() => {
+        const raw = fs.readFileSync(first);
+        return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
+      })()
+    );
+    check(
+      "the note is not mistaken for author content",
+      !reloaded.extras.includes("HOW-TO-READ-THIS.txt"),
+      reloaded.extras
+    );
+
+    const resaved = writeFile("note2.rkf", await RKF.serialize(reloaded));
+    const names = execFileSync("python3", [
+      "-c",
+      "import sys, zipfile; print(' '.join(zipfile.ZipFile(sys.argv[1]).namelist()))",
+      resaved,
+    ]).toString().trim().split(/\s+/);
+    const copies = names.filter((n) => n === "HOW-TO-READ-THIS.txt").length;
+    check("exactly one copy survives a round trip", copies === 1, names.join(" "));
+
+    // And it does its job: readable, before the prose, pointing somewhere useful.
+    const raw = fs.readFileSync(resaved);
+    const text = raw.toString("latin1");
+    check("the note is readable in the raw bytes", text.includes("This is a .rkf document"));
+    check(
+      "and comes before the document body",
+      text.indexOf("This is a .rkf document") < text.indexOf("# Note"),
+      `${text.indexOf("This is a .rkf document")} vs ${text.indexOf("# Note")}`
+    );
+    check(
+      "the body still starts within the first screen",
+      text.indexOf("Body text.") < 512,
+      text.indexOf("Body text.")
+    );
+  }
+
   console.log("--- removing an asset ---");
   {
     const doc = RKF.create({});

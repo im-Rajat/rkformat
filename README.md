@@ -194,10 +194,31 @@ With scripting off, the page still shows the Markdown as text.
 
 Four routes, in increasing order of fidelity:
 
-1. **Any text editor.** The body is stored uncompressed and first, so `cat`, `less`, Notepad
-   or a mail-client preview shows the Markdown after ~60 bytes of ZIP header. Images appear
-   as `![alt](assets/x.png)` references rather than pictures, which is the point — the prose
-   is never trapped.
+1. **Any text editor.** Everything before the first image is stored uncompressed, so `cat`,
+   `less`, Notepad or a mail-client preview shows a note explaining what the file is, then
+   the whole document, then the image list as legible JSON — all within the first screen:
+
+   ```
+   PK..........!.................mimetypeapplication/vnd.rkformat+zipPK...........HOW-TO-READ-THIS.txt
+   This is a .rkf document: Markdown text with its images packed into the same file.
+
+   The document text follows below - just scroll past this. The noise at the end of the
+   file is the images, stored as binary data.
+
+   To read it with the pictures: https://im-rajat.github.io/rkformat/
+   PK..........!....Z..........content.md# Welcome to `.rkf`
+
+   This whole document ...
+   ```
+
+   Images appear as `![alt](assets/x.png)` references rather than pictures, which is the
+   point — the prose is never trapped. The binary is all *after* the text, so nothing
+   readable is buried behind it.
+
+   The one limit: editors that refuse to open binary files at all — VS Code, GitHub's web
+   view — key on the NUL bytes in the ZIP header, which sit in the first 30 bytes and cannot
+   be removed. Notepad, TextEdit, `less`, `vim` and mail previews all show the text fine.
+
 2. **The web viewer** below: full rendering, nothing to install.
 3. **`rk cat doc.rkf`**, or *RK: View Markdown as Plain Text* in VS Code, which opens the
    body as a read-only `.md` editor with highlighting and search.
