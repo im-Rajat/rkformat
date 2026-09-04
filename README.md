@@ -144,6 +144,32 @@ the tick is written back into the Markdown. The transform runs *after* HTML sani
 the generated `<input>` never requires `<input>` on the allowlist; an author writing raw
 `<input>` still has it dropped.
 
+## Opening a `.rkf` by double-clicking it
+
+A browser chooses its handler from the **file extension**, not from what is inside the file.
+Renaming an HTML file to `.rkf` and opening it in Chrome shows the source as escaped text in a
+`<pre>` — the identical bytes named `.html` render. So no trick inside the file can make a
+browser display a `.rkf`; that is settled, and it is why the format does not try.
+
+What does work is letting the browser *own* the extension. The web editor ships a
+[web app manifest](docs/manifest.webmanifest) declaring a `file_handlers` entry for `.rkf` and
+`.rk` under the format's own media type. Install the editor once — the landing page offers it
+when the browser says it is possible — and from then on double-clicking a `.rkf` opens it in
+the editor.
+
+The launch hands over a `FileSystemFileHandle` rather than a copy, so **Ctrl+S writes back to
+the file you double-clicked**, like a desktop editor. A
+[service worker](docs/sw.js) caches the shell, so the installed app opens documents with no
+network at all.
+
+Three ways to share the `.rkf` itself, then, in order of how much the recipient has to do:
+
+| They have | What they do |
+|---|---|
+| The editor installed | Double-click the `.rkf`. |
+| Any browser | Drop the `.rkf` on [the editor](https://im-rajat.github.io/rkformat/). |
+| Nothing, maybe offline | You send `rk share` output instead — see below. |
+
 ## Sending one to someone who has nothing installed
 
 ```bash
@@ -310,12 +336,13 @@ paragraph styles, you need `.docx`.
 pytest                           # the format library - or, with no pytest installed:
 python3 tests/test_rkformat.py
 
-node tests/test_site_parity.js   # browser renderer vs. `rk render`, 102 fixtures
+node tests/test_site_parity.js   # browser renderer vs. `rk render`, 110 fixtures
 node tests/test_extension_undo.js  # the extension's undo/redo stack, against a vscode stub
 node tests/test_web_write.js     # the browser writer, validated by the Python CLI
 node tests/test_highlight.js     # the source highlighter, 94 checks
 tests/test_site_browser.sh       # headless Chrome: the web editor end to end, the WYSIWYG
-                                 # round trip, and live editing in the real webview shell
+                                 # round trip, live editing in the real webview shell, and
+                                 # the installable-app file handling for `.rkf`
 ```
 
 The Python suite covers round-tripping, determinism, reference resolution (including
@@ -325,7 +352,10 @@ demo document.
 
 `test_site_browser.sh` needs a Chrome or Chromium binary and skips cleanly if there isn't
 one, so it never turns into a false failure. It builds its live-editing harness by lifting
-the webview's actual HTML out of `extension.js`, so the test cannot drift from what ships.
+the webview's actual HTML out of `extension.js`, and the web-editor harness by lifting the
+script and stylesheet list out of `docs/index.html`, so neither test can drift from what
+ships. The file-handling path is covered by stubbing `launchQueue` and asserting that a
+launched `.rkf` opens and that saving writes back through the handle it was given.
 
 ## Layout
 
@@ -344,6 +374,8 @@ the webview's actual HTML out of `extension.js`, so the test cannot drift from w
 | [docs/assets/toolbar.js](docs/assets/toolbar.js) | Toolbar shared with the extension |
 | [docs/assets/highlight.js](docs/assets/highlight.js) | Markdown source highlighting, shared |
 | [src/rkformat/share.py](src/rkformat/share.py) | Builds the self-viewing HTML for `rk share` |
+| [docs/manifest.webmanifest](docs/manifest.webmanifest) | Makes the editor installable and claims `.rkf` |
+| [docs/sw.js](docs/sw.js) | Caches the shell so the installed app works offline |
 | [examples/](examples/) | A demo document and the script that builds it |
 
 ## Possible next steps

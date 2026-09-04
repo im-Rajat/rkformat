@@ -62,6 +62,10 @@ and the same toolbar, and can create and save `.rkf` files with nothing installe
 extension is the better fit when the documents live in a repo you already have open; the web
 editor is for when you do not want to install anything.
 
+It can also be **installed as an app**, which lets the browser claim the `.rkf` extension —
+after that, double-clicking a `.rkf` outside VS Code opens it in the browser editor, and
+Ctrl+S saves back to the same file.
+
 ## Requirements
 
 The extension is a thin shell over the `rk` CLI — all format logic lives in Python, so the

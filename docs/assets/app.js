@@ -1275,6 +1275,91 @@
     event.returnValue = "";
   });
 
+  // ------------------------------------------------- installing and file launches
+
+  /**
+   * Register the service worker.
+   *
+   * Two payoffs: the editor keeps working offline after one visit, and the app becomes
+   * installable - which is the only standards-based way to make a double-clicked `.rkf` open
+   * in a browser, since browsers choose a handler by file extension and no content trick can
+   * override that.
+   */
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register(new URL("../sw.js", ASSETS).href).catch(() => {
+        /* unsupported or blocked; the app still works, just not offline */
+      });
+    });
+  }
+
+  /**
+   * Open a document the operating system launched us with.
+   *
+   * The launch hands over a FileSystemFileHandle rather than a plain File, so Ctrl+S writes
+   * back to the very file that was double-clicked - the same as a desktop editor.
+   */
+  if ("launchQueue" in window) {
+    try {
+      window.launchQueue.setConsumer(async (params) => {
+        const handles = (params && params.files) || [];
+        if (!handles.length) return;
+        try {
+          const handle = handles[0];
+          openFile(await handle.getFile(), handle);
+        } catch (err) {
+          status(`Could not open the file: ${err.message}`, "error");
+        }
+      });
+    } catch (err) {
+      /* older browsers expose launchQueue without a usable consumer */
+    }
+  }
+
+  // The install hint only appears when the browser says installing is actually possible.
+  let installPrompt = null;
+  const installNotice = $("install-notice");
+
+  function installDismissed() {
+    try {
+      return localStorage.getItem("rkf.install-dismissed") === "1";
+    } catch (err) {
+      return false;
+    }
+  }
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    if (!installDismissed() && els.intro && !els.intro.hidden) installNotice.hidden = false;
+  });
+
+  window.addEventListener("appinstalled", () => {
+    installNotice.hidden = true;
+    installPrompt = null;
+    status("Installed. Double-clicking a .rkf will now open it here.");
+  });
+
+  $("act-install").addEventListener("click", async () => {
+    if (!installPrompt) return;
+    installNotice.hidden = true;
+    try {
+      await installPrompt.prompt();
+    } catch (err) {
+      /* the user dismissed the browser's own dialog */
+    }
+    installPrompt = null;
+  });
+
+  $("act-install-dismiss").addEventListener("click", () => {
+    installNotice.hidden = true;
+    try {
+      localStorage.setItem("rkf.install-dismissed", "1");
+    } catch (err) {
+      /* private browsing; the hint will simply come back */
+    }
+  });
+
   // A shared link opens straight into the document.
   const params = new URLSearchParams(location.search || location.hash.replace(/^#/, "?"));
   const initial = params.get("url") || params.get("doc");

@@ -266,6 +266,7 @@ button.link {
 #drop:hover, #drop:focus-visible { border-color: var(--ui-accent); color: var(--ui-accent); outline: none; }
 #drop p { margin: 0; }
 
+#install-notice,
 #draft-notice {
   display: flex;
   align-items: center;
@@ -281,7 +282,15 @@ button.link {
   font-size: 0.85rem;
 }
 
+#install-notice .link,
 #draft-notice .link { color: inherit; }
+
+/* The install hint is informational, not a warning. */
+#install-notice {
+  border-color: var(--ui-line);
+  background: var(--ui-panel);
+  color: var(--ui-muted);
+}
 
 #url-form {
   display: flex;

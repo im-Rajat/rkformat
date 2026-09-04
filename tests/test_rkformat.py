@@ -569,6 +569,42 @@ def test_generated_stylesheet_matches_page_css():
     assert PAGE_CSS in generated.read_text(), "document.css is stale - run python3 docs/build.py"
 
 
+def test_service_worker_cache_name_matches_its_shell():
+    """The worker is cache-first, so a stale cache name ships yesterday's app to installs.
+
+    docs/build.py names the cache after a digest of the files the worker caches. Asserting the
+    name is current turns "someone edited app.js and forgot to re-run the build" into a test
+    failure instead of a bug only visible to people who installed the app.
+    """
+    import hashlib
+    import re
+
+    root = Path(__file__).resolve().parents[1]
+    docs = root / "docs"
+    worker = docs / "sw.js"
+    if not worker.is_file():
+        return
+    source = worker.read_text(encoding="utf-8")
+
+    block = re.search(r"const SHELL = \[(.*?)\];", source, re.DOTALL)
+    assert block, "sw.js no longer declares a SHELL list"
+    digest = hashlib.sha256()
+    for name in re.findall(r'"([^"]+)"', block.group(1)):
+        path = docs / name
+        if path.is_dir() or not path.is_file():
+            continue
+        digest.update(name.encode("utf-8"))
+        digest.update(path.read_bytes())
+
+    expected = f"rkf-shell-{digest.hexdigest()[:12]}"
+    found = re.search(r'const CACHE = "([^"]+)"', source)
+    assert found, "sw.js no longer declares a CACHE name"
+    assert found.group(1) == expected, (
+        f"sw.js caches as {found.group(1)} but its shell hashes to {expected} "
+        "- run python3 docs/build.py"
+    )
+
+
 # ------------------------------------------------------------------------ render
 
 

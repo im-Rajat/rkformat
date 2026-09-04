@@ -86,6 +86,20 @@ URL.createObjectURL = (blob) => {
   return realCreateObjectURL(blob);
 };
 
+// The OS hands a launched file to launchQueue. Stubbed the way a browser provides it, so the
+// app's consumer can be driven directly.
+// defineProperty, not assignment: Chrome already exposes launchQueue as a read-only
+// property, so `window.launchQueue = ...` fails silently and the app talks to the real one -
+// which never fires without an actual file launch.
+Object.defineProperty(window, "launchQueue", {
+  configurable: true,
+  value: {
+    setConsumer: (fn) => {
+      window.__launchConsumer = fn;
+    },
+  },
+});
+
 // Keep prompts deterministic.
 window.prompt = (message, value) => (/title/i.test(message) ? "Harness Doc" : value || "x");
 window.confirm = () => true;
@@ -446,6 +460,73 @@ function report() {
       $("details-assets").textContent);
     check("it reports the checksum as verified", $("details-assets").textContent.includes("sha256"),
       $("details-assets").textContent);
+    // 14. Installability, and opening a double-clicked .rkf.
+    //
+    // Last, because a launch replaces the open document.
+    //
+    // A browser picks its handler from the file extension, so the only way a .rkf can open in
+    // one is for an installed app to claim the extension through the manifest. These checks
+    // cover the parts that do not need an actual install: the manifest declares the handler,
+    // and the app acts on a launch when the OS delivers one.
+    const manifest = await fetch("../docs/manifest.webmanifest").then((r) => r.json());
+    check("the manifest declares a file handler", Array.isArray(manifest.file_handlers));
+    const handler = (manifest.file_handlers || [])[0] || {};
+    const extensions = Object.values(handler.accept || {}).flat();
+    check("it claims .rkf", extensions.includes(".rkf"), JSON.stringify(extensions));
+    check("it claims .rk too", extensions.includes(".rk"), JSON.stringify(extensions));
+    check(
+      "under the format's own media type",
+      Object.keys(handler.accept || {})[0] === "application/vnd.rkformat+zip",
+      Object.keys(handler.accept || {}).join(",")
+    );
+    check("the manifest has an installable icon", (manifest.icons || []).some(
+      (icon) => icon.sizes === "192x192" && icon.type === "image/png"
+    ));
+    check("and a maskable one", (manifest.icons || []).some(
+      (icon) => (icon.purpose || "").includes("maskable")
+    ));
+
+    check("the app registered a launch consumer", typeof window.__launchConsumer === "function");
+    if (typeof window.__launchConsumer === "function") {
+      // Deliver a real document the way a double-click would.
+      const response = await fetch("../docs/welcome.rkf");
+      const launched = new File([await response.blob()], "launched.rkf", {
+        type: "application/vnd.rkformat+zip",
+      });
+      let savedThrough = null;
+      await window.__launchConsumer({
+        files: [
+          {
+            // A launch hands over a handle, not a File, which is what lets Ctrl+S write back.
+            getFile: async () => launched,
+            createWritable: async () => ({
+              write: async (bytes) => {
+                savedThrough = bytes;
+              },
+              close: async () => {},
+            }),
+            name: "launched.rkf",
+          },
+        ],
+      });
+      const opened = await waitFor("launch", () => $("doc-name").textContent.includes("launched.rkf"));
+      check("a launched .rkf opens", opened, $("doc-name").textContent);
+      check(
+        "its content is there",
+        source.value.includes("Welcome to"),
+        source.value.slice(0, 50)
+      );
+
+      // The handle came from the launch, so saving must go back through it rather than
+      // prompting for a new file.
+      click("#act-save");
+      const wroteBack = await waitFor("save through handle", () => savedThrough !== null);
+      check("saving writes back to the launched file", wroteBack, "no write seen");
+      if (wroteBack) {
+        check("what it wrote is a .rkf", RKF.looksLikeRkf(new Uint8Array(savedThrough)));
+      }
+    }
+
   } catch (error) {
     check("the harness ran to completion", false, (error && error.message) || String(error));
   }

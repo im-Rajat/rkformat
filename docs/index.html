@@ -6,6 +6,10 @@
 <title>.rkf — read, write and edit in the browser</title>
 <meta name="description" content="Create, edit and read .rkf documents in the browser - Markdown with its images embedded in one file. Nothing is uploaded anywhere.">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2c5aa0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/rkf-192.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/rkf-192.png">
 <link rel="stylesheet" href="assets/document.css">
 <link rel="stylesheet" href="assets/highlight.css">
 <link rel="stylesheet" href="assets/viewer.css">
@@ -76,6 +80,15 @@
              aria-label="URL of a .rkf file">
       <button type="submit">Open link</button>
     </form>
+
+    <div id="install-notice" hidden>
+      <span>
+        Install this as an app and your browser will open <code>.rkf</code> files when you
+        double-click them.
+      </span>
+      <button type="button" class="link" id="act-install">Install</button>
+      <button type="button" class="link" id="act-install-dismiss">Not now</button>
+    </div>
 
     <div id="draft-notice" hidden>
       <span id="draft-text"></span>
