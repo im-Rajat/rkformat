@@ -72,9 +72,6 @@ def render_body(
         ) from exc
 
     resolve = asset_url or data_uri(doc)
-    # typographer is off deliberately: smart quotes and dash substitution are cosmetic, and
-    # they are the single largest source of divergence from the browser viewer's renderer
-    # (docs/assets/markdown.js), which cannot reuse this code on static hosting.
     # linkify and typographer are both off deliberately. typographer's smart quotes and
     # linkify's bare-URL detection are cosmetic, and both diverge from the browser viewer's
     # renderer (docs/assets/markdown.js), which cannot reuse this code on static hosting.

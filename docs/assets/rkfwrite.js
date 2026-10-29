@@ -245,7 +245,7 @@
   function manifestJson(doc, touch) {
     const source = doc.manifest || {};
     const out = { rkf_version: source.rkf_version || "1.0" };
-    out.generator = "rkformat-web/0.1.0";
+    out.generator = global.RKF.GENERATOR;
     if (source.title != null) out.title = source.title;
     if (Array.isArray(source.authors) && source.authors.length) out.authors = source.authors;
     if (source.created) out.created = source.created;

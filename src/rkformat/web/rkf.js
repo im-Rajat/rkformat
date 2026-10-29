@@ -24,6 +24,9 @@
   const NOTE_MEMBER = "HOW-TO-READ-THIS.txt";
   const ASSET_DIR = "assets";
   const SPEC_MAJOR = "1";
+  // Recorded in manifest.generator. Kept in step with the Python package and the extension;
+  // tests/test_rkformat.py fails if they disagree.
+  const GENERATOR = "rkformat-web/0.5.0";
 
   // SPEC.md section 4 ceilings.
   const MAX_TOTAL_UNCOMPRESSED = 512 * 1024 * 1024;
@@ -724,7 +727,7 @@
     const doc = new RkfDocument(new Uint8Array(0));
     doc.manifest = {
       rkf_version: "1.0",
-      generator: "rkformat-web/0.1.0",
+      generator: GENERATOR,
       title: options.title || null,
       authors: options.authors || [],
       created: now,
@@ -762,5 +765,6 @@
     RkfError,
     MIMETYPE,
     SPEC_MAJOR,
+    GENERATOR,
   });
 })(typeof globalThis !== "undefined" ? globalThis : window);

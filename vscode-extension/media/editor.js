@@ -30,11 +30,14 @@
   let liveTimer = null;
   let latestHtml = "";
   let liveDirty = false;
+  // Where "Toggle Live" goes back to. Split when the document opened straight into Live.
+  let layoutBeforeLive = "split";
 
   // ------------------------------------------------------------------- layout
 
   function setLayout(name) {
     const previous = panes.dataset.layout;
+    if (name === "live" && previous && previous !== "live") layoutBeforeLive = previous;
     panes.dataset.layout = name;
     formatBar.hidden = name !== "live";
     for (const button of document.querySelectorAll("[data-layout]")) {
@@ -209,8 +212,6 @@
     document.execCommand("insertText", false, text);
   });
 
-  const FORMAT_BLOCKS = { h1: "H1", h2: "H2", h3: "H3", p: "P", quote: "BLOCKQUOTE", pre: "PRE" };
-
   function applyFormat(action) {
     // Undo and redo belong to VS Code (see applyEdit in extension.js), so they are asked for
     // rather than reimplemented here - a second history would fight the first.
@@ -222,137 +223,9 @@
       vscode.postMessage({ type: "pickImage" });
       return;
     }
-    live.focus();
-    switch (action) {
-      case "bold":
-      case "italic":
-        document.execCommand(action, false, null);
-        break;
-      case "outdent":
-      case "indent":
-        document.execCommand(action, false, null);
-        break;
-      case "clearFormat":
-        document.execCommand("removeFormat", false, null);
-        break;
-      case "task":
-        toggleTask();
-        break;
-      case "strikethrough":
-        document.execCommand("strikeThrough", false, null);
-        break;
-      case "code":
-        wrapSelection("code");
-        break;
-      case "ul":
-        document.execCommand("insertUnorderedList", false, null);
-        break;
-      case "ol":
-        document.execCommand("insertOrderedList", false, null);
-        break;
-      case "hr":
-        document.execCommand("insertHTML", false, "<hr>");
-        break;
-      case "table":
-        document.execCommand(
-          "insertHTML",
-          false,
-          "<table><thead><tr><th>Column</th><th>Column</th><th>Column</th></tr></thead>" +
-            "<tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>"
-        );
-        break;
-      case "link": {
-        const url = window.prompt("Link URL");
-        if (url) document.execCommand("createLink", false, url);
-        break;
-      }
-      default:
-        if (FORMAT_BLOCKS[action]) {
-          document.execCommand("formatBlock", false, FORMAT_BLOCKS[action]);
-        }
-    }
+    RKF.liveFormat.apply(live, action);
     liveDirty = true;
     serializeLive({ immediate: true });
-  }
-
-  /** The nearest ancestor of the caret matching `selector`, within the editable page. */
-  function closest(selector) {
-    const selection = window.getSelection();
-    if (!selection || !selection.anchorNode) return null;
-    const start =
-      selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
-    if (!start || !live.contains(start)) return null;
-    return start.closest(selector);
-  }
-
-  /**
-   * Turn the current list item into a task item, or back into a plain one.
-   *
-   * Creates the list first if the caret is not in one, which is what a word processor does
-   * when you click a list button on a bare paragraph.
-   */
-  /**
-   * Turn the block at the caret into a task item, or back into a plain one.
-   *
-   * Done by moving nodes rather than with execCommand: asking the browser to make a list out
-   * of a heading nests the <ul> *inside* the <h2>, which the serialiser then flattens back to
-   * a heading - silently losing the checkbox. Chaining formatBlock first does not help, since
-   * the selection does not survive it reliably.
-   */
-  function toggleTask() {
-    const checkbox = () => {
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.setAttribute("contenteditable", "false");
-      return box;
-    };
-
-    const item = closest("li");
-    if (item) {
-      const host = item.querySelector(":scope > p") || item;
-      const existing = item.querySelector(
-        ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
-      );
-      if (existing) {
-        existing.remove();
-        item.classList.remove("rkf-task");
-      } else {
-        item.classList.add("rkf-task");
-        host.insertBefore(checkbox(), host.firstChild);
-      }
-      return;
-    }
-
-    const block = closest("p, h1, h2, h3, h4, h5, h6, blockquote") || live.lastElementChild;
-    if (!block || !live.contains(block)) return;
-    const list = document.createElement("ul");
-    const listItem = document.createElement("li");
-    listItem.className = "rkf-task";
-    listItem.appendChild(checkbox());
-    while (block.firstChild) listItem.appendChild(block.firstChild);
-    list.appendChild(listItem);
-    block.replaceWith(list);
-
-    const range = document.createRange();
-    range.selectNodeContents(listItem);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
-  /**
-   * Make the rendered checkboxes clickable.
-   *
-   * The renderers emit them `disabled`, which is right for a read-only page or an exported
-   * HTML file, but in live editing a checkbox you cannot tick is useless. `contenteditable`
-   * is turned off on them so the caret does not land inside.
-   */
-  function enableTaskCheckboxes() {
-    for (const box of live.querySelectorAll('input[type="checkbox"]')) {
-      box.disabled = false;
-      box.setAttribute("contenteditable", "false");
-    }
   }
 
   live.addEventListener("change", (event) => {
@@ -361,25 +234,6 @@
       serializeLive({ immediate: true });
     }
   });
-
-  /** Wrap the selection in an element, for formats execCommand has no verb for. */
-  function wrapSelection(tagName) {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    if (range.collapsed) return;
-    const wrapper = document.createElement(tagName);
-    try {
-      wrapper.appendChild(range.extractContents());
-      range.insertNode(wrapper);
-      selection.removeAllRanges();
-      const after = document.createRange();
-      after.selectNodeContents(wrapper);
-      selection.addRange(after);
-    } catch (err) {
-      /* selection spanned incompatible blocks; leave it alone */
-    }
-  }
 
   for (const button of formatBar.querySelectorAll("[data-format]")) {
     // mousedown, so the selection in the editable region is still live.
@@ -403,28 +257,13 @@
 
   /** Insert an embedded image at the caret, as a real element. */
   function insertImageElement(asset) {
-    const img = document.createElement("img");
-    img.src = asset.data_uri || "";
-    img.alt = asset.alt || "";
-    img.className = "rkf-image";
-    img.setAttribute("data-rkf-src", asset.path);
-    img.setAttribute("data-rkf-md", "1");
-    if (asset.width && asset.height) {
-      img.width = asset.width;
-      img.height = asset.height;
-    }
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount && live.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(img);
-      range.setStartAfter(img);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    } else {
-      live.appendChild(img);
-    }
+    RKF.liveFormat.insertImage(live, {
+      src: asset.data_uri,
+      alt: asset.alt,
+      path: asset.path,
+      width: asset.width,
+      height: asset.height,
+    });
     liveDirty = true;
     serializeLive({ immediate: true });
   }
@@ -659,7 +498,7 @@
         latestHtml = message.html || "";
         preview.innerHTML = latestHtml;
         live.innerHTML = latestHtml;
-        enableTaskCheckboxes();
+        RKF.liveFormat.enableCheckboxes(live);
         liveDirty = false;
         debounceMs = typeof message.debounceMs === "number" ? message.debounceMs : 250;
         renderAssets(message.assets);
@@ -678,7 +517,7 @@
         // someone is typing would throw the caret to the top of the document.
         if (message.forLive) {
           live.innerHTML = message.html;
-          enableTaskCheckboxes();
+          RKF.liveFormat.enableCheckboxes(live);
           liveDirty = false;
         }
         renderProblems(message.problems);
@@ -708,9 +547,11 @@
         setStatus("");
         break;
 
-      case "setLayout":
-        setLayout(message.layout);
+      case "toggleLive": {
+        const inLive = panes.dataset.layout === "live";
+        setLayout(inLive ? layoutBeforeLive : "live");
         break;
+      }
 
       case "restore":
         // Undo or redo happened on the host side. Put the body back without posting a

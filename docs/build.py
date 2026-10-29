@@ -93,8 +93,6 @@ def _app_icon(size: int, *, maskable: bool) -> bytes:
             return background
         # A folded corner.
         fold = 0.24 * scale
-        if u > right - fold and v < top + fold and (right - u) + (top - v) * -1 < 0:
-            pass
         if (right - u) < fold and (v - top) < fold and (right - u) + (v - top) < fold:
             return background
 
@@ -187,7 +185,7 @@ def main() -> int:
     # One canonical copy lives here; the extension gets a generated duplicate, because a
     # packaged extension cannot read files from outside its own directory.
     media = ROOT / "vscode-extension" / "media"
-    for name in ("tomarkdown.js", "toolbar.js", "highlight.js", "highlight.css"):
+    for name in ("tomarkdown.js", "toolbar.js", "liveformat.js", "highlight.js", "highlight.css"):
         source = docs / "assets" / name
         target = media / name
         if not media.is_dir():

@@ -264,8 +264,9 @@ The site cannot call Python, so some things necessarily exist twice. Three mecha
 them from drifting:
 
 - **Shared source where it is possible.** The renderer, the sanitiser, the HTML→Markdown
-  serialiser, the toolbar definition and the source highlighter live once in `docs/assets/`
-  and the extension gets generated copies from [docs/build.py](docs/build.py). One test
+  serialiser, the toolbar definition, the Live-mode formatting actions and the source
+  highlighter live once in `docs/assets/` and the extension gets generated copies from
+  [docs/build.py](docs/build.py). One test
   asserts the copies are current; another asserts that anything the webview loads is actually
   in the build script's list, so a new shared file cannot be forgotten.
   The stylesheet is generated from `rkformat.render.PAGE_CSS` the same way.
@@ -393,6 +394,7 @@ launched `.rkf` opens and that saving writes back through the handle it was give
 | [docs/](docs/) | The web editor, served by GitHub Pages |
 | [docs/assets/rkfwrite.js](docs/assets/rkfwrite.js) | Writes `.rkf` in the browser |
 | [docs/assets/toolbar.js](docs/assets/toolbar.js) | Toolbar shared with the extension |
+| [docs/assets/liveformat.js](docs/assets/liveformat.js) | What the toolbar does in Live mode, shared |
 | [docs/assets/highlight.js](docs/assets/highlight.js) | Markdown source highlighting, shared |
 | [src/rkformat/share.py](src/rkformat/share.py) | Builds the self-viewing HTML for `rk share` |
 | [docs/manifest.webmanifest](docs/manifest.webmanifest) | Makes the editor installable and claims `.rkf` |

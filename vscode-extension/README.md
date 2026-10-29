@@ -48,7 +48,7 @@ instead of being flattened to plain Markdown image syntax.
 
 Source stays canonical. If Live mode ever does something you did not intend, switch to Source
 and the Markdown is right there. `tests/test_site_browser.sh` checks that
-`render(toMarkdown(render(md)))` equals `render(md)` across 40 fixtures, so an edit that
+`render(toMarkdown(render(md)))` equals `render(md)` across 44 fixtures, so an edit that
 changes nothing should not change the document.
 
 Pasting into Live mode inserts **plain text**, deliberately: pasted rich HTML from a browser

@@ -256,12 +256,7 @@
   /** Load the rendered document into the editable page. */
   function loadLive() {
     els.live.innerHTML = render(els.source.value);
-    for (const box of els.live.querySelectorAll('input[type="checkbox"]')) {
-      // The renderers emit checkboxes disabled, which is right for a read-only page. While
-      // editing, a checkbox you cannot tick is useless.
-      box.disabled = false;
-      box.setAttribute("contenteditable", "false");
-    }
+    RKF.liveFormat.enableCheckboxes(els.live);
     liveDirty = false;
   }
 
@@ -380,133 +375,11 @@
 
   // ------------------------------------------------------------- format actions
 
-  function closest(selector) {
-    const selection = window.getSelection();
-    if (!selection || !selection.anchorNode) return null;
-    const start =
-      selection.anchorNode.nodeType === 1 ? selection.anchorNode : selection.anchorNode.parentElement;
-    return start && els.live.contains(start) ? start.closest(selector) : null;
-  }
-
-  function wrapSelection(tagName) {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    if (range.collapsed) return;
-    const wrapper = document.createElement(tagName);
-    try {
-      wrapper.appendChild(range.extractContents());
-      range.insertNode(wrapper);
-      selection.removeAllRanges();
-      const after = document.createRange();
-      after.selectNodeContents(wrapper);
-      selection.addRange(after);
-    } catch (err) {
-      /* selection spanned incompatible blocks */
-    }
-  }
-
-  /**
-   * Turn the block at the caret into a task item, or back into a plain one.
-   *
-   * Done by moving nodes rather than with execCommand: asking the browser to make a list out
-   * of a heading nests the <ul> *inside* the <h2>, which the serialiser then flattens back to
-   * a heading - silently losing the checkbox. Chaining formatBlock first does not help, since
-   * the selection does not survive it reliably.
-   */
-  function toggleTask() {
-    const checkbox = () => {
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.setAttribute("contenteditable", "false");
-      return box;
-    };
-
-    const item = closest("li");
-    if (item) {
-      const host = item.querySelector(":scope > p") || item;
-      const existing = item.querySelector(
-        ':scope > input[type="checkbox"], :scope > p > input[type="checkbox"]'
-      );
-      if (existing) {
-        existing.remove();
-        item.classList.remove("rkf-task");
-      } else {
-        item.classList.add("rkf-task");
-        host.insertBefore(checkbox(), host.firstChild);
-      }
-      return;
-    }
-
-    const block = closest("p, h1, h2, h3, h4, h5, h6, blockquote") || els.live.lastElementChild;
-    if (!block || !els.live.contains(block)) return;
-    const list = document.createElement("ul");
-    const listItem = document.createElement("li");
-    listItem.className = "rkf-task";
-    listItem.appendChild(checkbox());
-    while (block.firstChild) listItem.appendChild(block.firstChild);
-    list.appendChild(listItem);
-    block.replaceWith(list);
-
-    const range = document.createRange();
-    range.selectNodeContents(listItem);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-
-  const FORMAT_BLOCKS = { h1: "H1", h2: "H2", h3: "H3", p: "P", quote: "BLOCKQUOTE", pre: "PRE" };
-
   function applyFormat(action) {
     if (action === "undo") return undo();
     if (action === "redo") return redo();
     if (action === "image") return pickImages();
-    els.live.focus();
-    switch (action) {
-      case "bold":
-      case "italic":
-      case "outdent":
-      case "indent":
-        document.execCommand(action, false, null);
-        break;
-      case "strikethrough":
-        document.execCommand("strikeThrough", false, null);
-        break;
-      case "clearFormat":
-        document.execCommand("removeFormat", false, null);
-        break;
-      case "code":
-        wrapSelection("code");
-        break;
-      case "task":
-        toggleTask();
-        break;
-      case "ul":
-        document.execCommand("insertUnorderedList", false, null);
-        break;
-      case "ol":
-        document.execCommand("insertOrderedList", false, null);
-        break;
-      case "hr":
-        document.execCommand("insertHTML", false, "<hr>");
-        break;
-      case "table":
-        document.execCommand(
-          "insertHTML",
-          false,
-          "<table><thead><tr><th>Column</th><th>Column</th><th>Column</th></tr></thead>" +
-            "<tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table>"
-        );
-        break;
-      case "link": {
-        const url = window.prompt("Link URL");
-        if (url) document.execCommand("createLink", false, url);
-        break;
-      }
-      default:
-        if (FORMAT_BLOCKS[action]) document.execCommand("formatBlock", false, FORMAT_BLOCKS[action]);
-    }
+    RKF.liveFormat.apply(els.live, action);
     liveDirty = true;
     serializeLive(true);
   }
@@ -537,28 +410,13 @@
   function insertAsset(asset) {
     const reference = `![${asset.alt || ""}](${asset.path})`;
     if (layout === "live") {
-      const img = document.createElement("img");
-      img.src = doc.assetUrl(asset) || "";
-      img.alt = asset.alt || "";
-      img.className = "rkf-image";
-      img.setAttribute("data-rkf-src", asset.path);
-      img.setAttribute("data-rkf-md", "1");
-      if (asset.width && asset.height) {
-        img.width = asset.width;
-        img.height = asset.height;
-      }
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount && els.live.contains(selection.anchorNode)) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(img);
-        range.setStartAfter(img);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-      } else {
-        els.live.appendChild(img);
-      }
+      RKF.liveFormat.insertImage(els.live, {
+        src: doc.assetUrl(asset),
+        alt: asset.alt,
+        path: asset.path,
+        width: asset.width,
+        height: asset.height,
+      });
       liveDirty = true;
       serializeLive(true);
       return;

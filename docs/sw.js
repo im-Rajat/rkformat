@@ -19,7 +19,7 @@
 
 "use strict";
 
-const CACHE = "rkf-shell-3728e3daa74e";
+const CACHE = "rkf-shell-a995e0bb18c3";
 
 // Relative so this works from a project page such as /rkformat/ as well as a root domain.
 const SHELL = [
@@ -36,6 +36,7 @@ const SHELL = [
   "assets/tomarkdown.js",
   "assets/highlight.js",
   "assets/toolbar.js",
+  "assets/liveformat.js",
   "assets/app.js",
   "assets/share-template.html",
   "assets/icons/rkf-192.png",

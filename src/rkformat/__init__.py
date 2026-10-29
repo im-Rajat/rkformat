@@ -22,7 +22,7 @@ from .errors import (
 )
 from .manifest import MIMETYPE, SPEC_VERSION, Asset, Manifest
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "RkDocument",

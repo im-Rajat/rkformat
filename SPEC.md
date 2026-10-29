@@ -211,10 +211,10 @@ This policy affects file size and write cost only, never correctness.
 ## 6. Determinism
 
 Writers should emit reproducible archives: fixed ZIP timestamps (`1980-01-01 00:00:00`),
-stable member ordering (`mimetype`, `manifest.json`, content, then assets sorted by path),
-and sorted JSON keys. Two documents with identical content then produce byte-identical
-files, which makes checksums and content-addressed storage useful. Wall-clock time lives
-in `manifest.modified`, not in ZIP headers.
+stable member ordering (`mimetype`, the text-editor note, content, `manifest.json`, then
+assets sorted by path, as in section 2), and sorted JSON keys. Two documents with identical
+content then produce byte-identical files, which makes checksums and content-addressed
+storage useful. Wall-clock time lives in `manifest.modified`, not in ZIP headers.
 
 ## 7. Versioning
 

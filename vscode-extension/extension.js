@@ -271,6 +271,7 @@ class RkfEditorProvider {
 ${editorBodyHtml()}
   <script nonce="${nonce}" src="${media("highlight.js")}"></script>
   <script nonce="${nonce}" src="${media("tomarkdown.js")}"></script>
+  <script nonce="${nonce}" src="${media("liveformat.js")}"></script>
   <script nonce="${nonce}" src="${media("editor.js")}"></script>
 </body>
 </html>`;
@@ -434,7 +435,7 @@ ${editorBodyHtml()}
 
   /** Re-read the document from disk, keeping the in-editor body. */
   async refresh(document) {
-    const snapshot = await rkJson(["export-json", document.uri.fsPath]);
+    const snapshot = await rkJson(["export-json", document.uri.fsPath, "--html", htmlMode()]);
     document.snapshot = snapshot;
     this.post(document, {
       type: "assets",
@@ -459,7 +460,7 @@ ${editorBodyHtml()}
   }
 
   async revertCustomDocument(document) {
-    const snapshot = await rkJson(["export-json", document.uri.fsPath]);
+    const snapshot = await rkJson(["export-json", document.uri.fsPath, "--html", htmlMode()]);
     document.snapshot = snapshot;
     document.markdown = snapshot.markdown;
     document.savedMarkdown = snapshot.markdown;
@@ -687,7 +688,7 @@ function activate(context) {
         vscode.window.showWarningMessage("RK Document: focus an .rkf editor first.");
         return;
       }
-      for (const panel of panels) panel.webview.postMessage({ type: "setLayout", layout: "live" });
+      for (const panel of panels) panel.webview.postMessage({ type: "toggleLive" });
     }),
     vscode.commands.registerCommand("rkformat.insertImage", () => {
       const uri = activeRkfUri();

@@ -598,7 +598,13 @@ def test_share_template_survives_css_and_js_braces():
 
 # Every file docs/build.py copies into the extension. Listed here rather than inferred, so
 # adding a shared file without adding it to the build is caught.
-GENERATED_COPIES = ("tomarkdown.js", "toolbar.js", "highlight.js", "highlight.css")
+GENERATED_COPIES = (
+    "tomarkdown.js",
+    "toolbar.js",
+    "liveformat.js",
+    "highlight.js",
+    "highlight.css",
+)
 
 
 def test_generated_extension_copies_are_current():
@@ -630,6 +636,29 @@ def test_every_shared_asset_is_copied():
         assert name in GENERATED_COPIES, (
             f"the webview loads {name}, but docs/build.py does not copy it"
         )
+
+
+def test_versions_agree():
+    """The package, the extension and the web writer ship together, so they share a version.
+
+    The extension's was bumped every release while the other two sat at 0.1.0, which made
+    manifest.generator useless for telling which build wrote a file.
+    """
+    from rkformat import __version__
+
+    root = Path(__file__).resolve().parents[1]
+    package_json = root / "vscode-extension" / "package.json"
+    if package_json.is_file():
+        extension_version = json.loads(package_json.read_text())["version"]
+        assert extension_version == __version__, (
+            f"vscode-extension/package.json is {extension_version}, the package is {__version__}"
+        )
+    reader = (root / "docs" / "assets" / "rkf.js").read_text()
+    web_generator = re.search(r'const GENERATOR = "rkformat-web/([^"]+)"', reader)
+    assert web_generator, "docs/assets/rkf.js no longer declares GENERATOR"
+    assert web_generator.group(1) == __version__, (
+        f"the web writer says {web_generator.group(1)}, the package is {__version__}"
+    )
 
 
 def test_generated_stylesheet_matches_page_css():
